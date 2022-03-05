@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 7a6ead17f7b466141a560242f7d71a8f
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - SmallSprite: {fileID: -4672790576089934573, guid: 0db06e8f32eace745b7bd584f722bd0f, type: 3}
+  - BigSprite: {fileID: -7995427946482172144, guid: 0db06e8f32eace745b7bd584f722bd0f, type: 3}
+  - Transit1: {fileID: -8851676690923497762, guid: 0db06e8f32eace745b7bd584f722bd0f, type: 3}
+  - Transit2: {fileID: -2000066228891863464, guid: 0db06e8f32eace745b7bd584f722bd0f, type: 3}
+  - Transit3: {fileID: -1260885136656504061, guid: 0db06e8f32eace745b7bd584f722bd0f, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
