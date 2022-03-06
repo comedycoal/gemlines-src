@@ -8,10 +8,9 @@ public class GameManager : MonoBehaviour
     public enum Phase
     {
         NONE = 0,
-        START,
+        GAME_START,
         TURN_START,
         PLAYER_TURN,
-        PAUSED,
         TIMEATK_STALLING,
         TIMEATK_POPULIZING
     }
@@ -63,9 +62,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private MusicPlayer m_musicPlayer;
     [SerializeField] private SoundPlayer m_soundPlayer;
 
+    [SerializeField] private bool m_debug;
+
 
     //################# Properties
     public Phase CurrentPhase => m_currPhase;
+    public bool IsDebug => m_debug;
 
 
     //################# Methods
@@ -79,14 +81,18 @@ public class GameManager : MonoBehaviour
 
     private void OnBoardSetUp(object sender, EventArgs e)
     {
-        if (m_currPhase == Phase.START)
+        if (m_currPhase == Phase.GAME_START)
             SetPhase(Phase.TURN_START);
     }
 
-    private void OnPreviewPopulated(object sender, EventArgs e)
+    private void OnPreviewPopulated(object sender, Color[] e)
     {
         if (m_currPhase == Phase.TURN_START)
+        {
+            m_turnCount += 1;
+            m_previewer.SetPreviews(e);
             SetPhase(Phase.PLAYER_TURN);
+        }
     }
 
     private void OnPlayerTurnDone(object sender, EventArgs e)
@@ -111,11 +117,6 @@ public class GameManager : MonoBehaviour
         EnterPhaseEvent?.Invoke(this, m_currPhase);
     }
 
-    private void Update()
-    {
-
-    }
-
     private void OnDestroy()
     {
         m_boardController.BoardSetUp -= OnBoardSetUp;
@@ -132,25 +133,38 @@ public class GameManager : MonoBehaviour
 
     public void NewGame()
     {
-        SetPhase(Phase.START);
+        SetPhase(Phase.GAME_START);
     }
 
-    public void SetToTimeAttack()
+    public void PauseGame()
     {
-        m_gameMode = GameMode.TIME_ATK;
+        GamePaused?.Invoke(this, true);
     }
+
+    public void ResumeGame()
+    {
+        GamePaused?.Invoke(this, false);
+    }
+
 
     public void EndGame()
     {
         SetPhase(Phase.NONE);
 
-        // Update hi-score, etc.
-        int score = m_scoreboard.GetScore();
-        m_highScoreboard.Set(score);
+    }
+    public void SetToTimeAttack()
+    {
+        m_gameMode = GameMode.TIME_ATK;
+    }
+
+    public void RegisterHit(int totalHitCount)
+    {
+        m_scoreboard.AddScore(totalHitCount);
     }
 
 
     //################# Events
 
     public event EventHandler<Phase> EnterPhaseEvent;
+    public event EventHandler<Boolean> GamePaused;
 }

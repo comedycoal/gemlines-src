@@ -40,7 +40,7 @@ public class BoardController : MonoBehaviour
     /// <summary>
     /// This event is invoked when all previewed gems are in play -> GameManager set Phase to PLAYER_TURN
     /// </summary>
-    public event EventHandler PreviewSetup;
+    public event EventHandler<Color[]> PreviewSetup;
 
     /// <summary>
     /// This event is invoked when the player turn is done -> GameManager set Phase to TURN_START
@@ -99,7 +99,17 @@ public class BoardController : MonoBehaviour
     private void Start()
     {
         GameManager.Instance.EnterPhaseEvent += HandleGamePhaseEvent;
+        GameManager.Instance.GamePaused += HandleGamePause;
     }
+
+
+    //----------// OnDestroy set-up
+    private void OnDestroy()
+    {
+        GameManager.Instance.EnterPhaseEvent -= HandleGamePhaseEvent;
+        GameManager.Instance.GamePaused -= HandleGamePause;
+    }
+
 
     /// <summary>
     /// Handle events from <see cref="GameManager"/>, each of which signifying a change in the game state.
@@ -108,12 +118,12 @@ public class BoardController : MonoBehaviour
     /// <param name="e">The current <see cref="GameManager.Phase"/> that the game is in</param>
     private void HandleGamePhaseEvent(object sender, GameManager.Phase e)
     {
-        Debug.Log(e);
+       if (GameManager.Instance.IsDebug) Debug.Log(e);
         if (e == GameManager.Phase.NONE)
         {
             m_allowPlayerControl = false;
         }
-        else if (e == GameManager.Phase.START)
+        else if (e == GameManager.Phase.GAME_START)
         {
             Reset();
             m_allowPlayerControl = false;
@@ -125,15 +135,11 @@ public class BoardController : MonoBehaviour
             m_allowPlayerControl = false;
             ActualizePreviewedCells();
             PopulatePreviewCells();
-            PreviewSetup?.Invoke(this, EventArgs.Empty);
+            PreviewSetup?.Invoke(this, m_previewQueue.ConvertAll<Color>(x => x.GemColor).ToArray());
         }
         else if (e == GameManager.Phase.PLAYER_TURN)
         {
             m_allowPlayerControl = true;
-        }
-        else if (e == GameManager.Phase.PAUSED)
-        {
-            m_allowPlayerControl = false;
         }
         else if (e == GameManager.Phase.TIMEATK_STALLING)
         {
@@ -143,6 +149,14 @@ public class BoardController : MonoBehaviour
         {
             m_allowPlayerControl = false;
         }
+    }
+
+    private void HandleGamePause(object sender, bool isPaused)
+    {
+        if (isPaused)
+            m_allowPlayerControl = false;
+        else
+            m_allowPlayerControl = true;
     }
 
     /// <summary>
@@ -187,18 +201,20 @@ public class BoardController : MonoBehaviour
     /// </summary>
     private void PopulatePreviewCells()
     {
-        if (CountEmptyCells() < m_newGemPerTurn)
-        {
-            BoardFillled?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-
         for (int i = 0; i < m_newGemPerTurn; i++)
         {
             GemCell gemCell = PopAnEmptyGemCell();
+            if (gemCell == null)
+            {
+                BoardFillled?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
             m_previewQueue.Add(gemCell);
             gemCell.SetAsPreview(GetAppropriateGemType(), GetAppropriateGemColorIndex());
         }
+
+        if (GameManager.Instance.IsDebug) Debug.Log("Empty cells: " + CountEmptyCells());
     }
 
     private void ActualizePreviewedCells()
@@ -214,14 +230,19 @@ public class BoardController : MonoBehaviour
 
             if (hit)
             {
+                int count = 0;
                 foreach (var line in cellsToDestroy)
+                {
                     foreach (var cell in line)
                     {
-                        cell.Reset();
+                        cell.DestroyGem();
                         // Add points
 
                         m_emptyCellSet.Add(cell); // Add back to empty set
                     }
+                    count += line.Count;
+                }
+                GameManager.Instance.RegisterHit(count);
             }
         }
         m_previewQueue.Clear();
@@ -234,9 +255,9 @@ public class BoardController : MonoBehaviour
         if (!m_allowPlayerControl)
             return;
 
-        Debug.Log("Clicked " + gemCell.name);
-        // If this is a move for selected cell
-        if (m_selectedCell != null)
+        if (GameManager.Instance.IsDebug) Debug.Log("Clicked " + gemCell.name);
+        // If this is a move for selected GEM
+        if (m_selectedCell != null && m_selectedCell.IsInPlay)
         {
             // If player want to move to an "empty" cell
             if (!gemCell.IsInPlay)
@@ -266,8 +287,8 @@ public class BoardController : MonoBehaviour
                 m_selectedCell = null;
             }
         }
-        // If player selected a new cell
-        else if (gemCell.IsSelectible)
+        // If player selected a new GEM
+        else if (gemCell.IsSelectible && gemCell.IsInPlay)
         {
             m_selectedCell = gemCell;
             m_selectedCell.OnSelected();
@@ -287,10 +308,11 @@ public class BoardController : MonoBehaviour
         m_allowPlayerControl = false;
 
         // Set src to null
-        GemCell.GemType type = src.Type;
-        int colorIdx = src.ColorIndex;
+        GemCell.GemType typeSrc = src.Type;
+        int colorIdxSrc = src.ColorIndex;
         Color color = src.GemColor;
         src.Reset();
+        m_emptyCellSet.Add(src);
 
         // Make a dummy GO
         GameObject dummy = Instantiate(m_gemCellDummyPrefab);
@@ -321,41 +343,71 @@ public class BoardController : MonoBehaviour
         dummy.transform.position = new Vector3(-99.0f, -99.0f, -100.0f);
         Destroy(dummy);
 
+        // The cell is moved to dest.
+        // If dest a previewed gem, we need to move it else where, but only if the next hit check fails.
+        // So, save the destination's gem first;
         GemCell dest = movePath[movePath.Count - 1];
 
-        // See if cell moved into is in the preview queue, if so, replace it
+        int colorIdxPreview = -1;
+        GemCell.GemType typePreview = GemCell.GemType.NONE;
+        int replacementIndex = -1;
         for (int k = 0; k < m_previewQueue.Count; k++)
         {
             if (m_previewQueue[k] == dest)
             {
-                GemCell replacement = PopAnEmptyGemCell();
-                replacement.SetAsPreview(dest.Type, dest.ColorIndex);
+                replacementIndex = k;
                 break;
             }
         }
+        if (replacementIndex != -1)
+        {
+            typePreview = m_previewQueue[replacementIndex].Type;
+            colorIdxPreview = m_previewQueue[replacementIndex].ColorIndex;
+        }
+
 
         // Set the destination gem
-        dest.SetGemIdle(type, colorIdx);
+        dest.SetGemIdle(typeSrc, colorIdxSrc);
+
 
         // Hit check
         List<List<GemCell>> cellsToDestroy;
         bool hit = HitCheck(dest, out cellsToDestroy);
 
+        // Hit: nothing happens, the saved previewed gem stays where it is
         if (hit)
         {
+            int count = 0;
             foreach (var line in cellsToDestroy)
+            {
                 foreach (var cell in line)
                 {
-                    cell.Reset();
+                    cell.DestroyGem();
                     // Add points
 
                     m_emptyCellSet.Add(cell); // Add back to empty set
                 }
-            
+                count += line.Count;
+            }
+
+            GameManager.Instance.RegisterHit(count);
+
             m_allowPlayerControl = true;
         }
         else
         {
+            // The new gem blocks the old one, move the old gem elsewhere
+            if (replacementIndex != -1)
+            {
+                GemCell replacement = PopAnEmptyGemCell();
+
+                if (replacement == null)
+                    BoardFillled?.Invoke(this, EventArgs.Empty);
+
+                m_previewQueue[replacementIndex] = replacement;
+                m_previewQueue[replacementIndex].SetAsPreview(typePreview, colorIdxPreview);
+            }
+
             PlayerTurnDone?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -371,8 +423,11 @@ public class BoardController : MonoBehaviour
             for (int j = 0; j < m_boardSize; j++)
             {
                 m_grid[i, j].PathFindingPrevNode = null;
+                m_grid[i, j].CummulativeGCost = 99999;
             }
         }
+
+        src.CummulativeGCost = 0;
 
         while (openSet.Count > 0)
         {
@@ -387,7 +442,14 @@ public class BoardController : MonoBehaviour
             {
                 if (IsInsideBoard(xs[i], ys[i]) && !closedSet.Contains(m_grid[xs[i], ys[i]] ) && !m_grid[xs[i], ys[i]].IsBlocking(src))
                 {
-                    m_grid[xs[i], ys[i]].PathFindingPrevNode = curr;
+                    int gFromCurr = curr.CummulativeGCost + 1;
+
+                    if (gFromCurr < m_grid[xs[i], ys[i]].CummulativeGCost)
+                    {
+                        m_grid[xs[i], ys[i]].CummulativeGCost = gFromCurr;
+                        m_grid[xs[i], ys[i]].PathFindingPrevNode = curr;
+                    }
+
                     openSet.Add(m_grid[xs[i], ys[i]]);
                 }
             }
@@ -405,7 +467,7 @@ public class BoardController : MonoBehaviour
 
         foreach (var cell in l)
         {
-            int f = cell.Distance(dest);
+            int f = cell.Distance(dest) + cell.CummulativeGCost;
             if (f < max)
             {
                 res = cell;
@@ -479,12 +541,6 @@ public class BoardController : MonoBehaviour
     }
 
 
-    //----------// OnDestroy set-up
-    private void OnDestroy()
-    {
-        GameManager.Instance.EnterPhaseEvent -= HandleGamePhaseEvent;
-    }
-
     private void ClearGrid()
     {
         for (int i = 0; i < m_boardSize; i++)
@@ -513,15 +569,21 @@ public class BoardController : MonoBehaviour
                            -1);
     }
 
-    private int CountEmptyCells()
+    public int CountEmptyCells()
     {
         return m_emptyCellSet.Count;
     }
 
     private GemCell PopAnEmptyGemCell()
     {
-        var cell =  m_emptyCellSet.ElementAt(m_rng.Next(0, m_emptyCellSet.Count));
-        m_emptyCellSet.Remove(cell);
+        GemCell cell = null;
+        while (m_emptyCellSet.Count > 0)
+        {
+            cell = m_emptyCellSet.ElementAt(m_rng.Next(0, m_emptyCellSet.Count));
+            m_emptyCellSet.Remove(cell);
+            if (cell.Type == GemCell.GemType.NONE)
+                break;
+        }
         return cell;
     }
 

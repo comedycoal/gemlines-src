@@ -36,6 +36,7 @@ public class GemCell : MonoBehaviour
     private Animator m_animator;
 
     [SerializeField] private ColorSet m_colorSet;
+    [SerializeField] private GemManualAnimator m_manualAnimator;
 
 
     //################# Properties
@@ -54,6 +55,8 @@ public class GemCell : MonoBehaviour
     /// A cell is selectible if it is not undergoing the "SMALL_TO_BIG" animation
     /// </summary>
     public bool IsSelectible => m_isSelectible;
+
+    public int CummulativeGCost { get; set; }
     public GemCell PathFindingPrevNode { get; set; }
 
 
@@ -100,15 +103,13 @@ public class GemCell : MonoBehaviour
         m_colorIndex = colorIndex;
 
         // TODO: Change sprites, anims, and all that
-        if (type == GemType.NONE)
+        if (colorIndex == -1)
         {
             m_sprRdr.color = Color.white;
         }
         else if (type == GemType.WILD)
         {
             // TO DO: rapid color switch
-
-
         }
         else
             m_sprRdr.color = m_colorSet.GetColor(colorIndex);
@@ -138,6 +139,7 @@ public class GemCell : MonoBehaviour
         m_isInPlay = true;
         m_isSelectible = true;
         m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
+        m_animator.SetTrigger("ImmediatePopup");
         SetGem(type, colorIndex);
     }
 
@@ -157,7 +159,7 @@ public class GemCell : MonoBehaviour
     }
 
     /// <summary>
-    /// Reset the cell to empty state
+    /// Reset the cell to empty state, mostly used in START game phase
     /// </summary>
     public void Reset()
     {
@@ -165,7 +167,20 @@ public class GemCell : MonoBehaviour
         m_isInPlay = false;
         m_isSelectible = true;
         m_animator.SetInteger("TransitionState", 0);
-        m_animator.Play("Gem_null"); ;
+        m_animator.Play("Gem_null");
+    }
+
+    /// <summary>
+    /// Destroy the gem at the cell (if any).
+    /// </summary>
+    public void DestroyGem()
+    {
+        if (IsInPlay)
+        {
+            // Play egregious animation
+            m_manualAnimator.DoDestroyAnimation();
+            
+        }
     }
 
     /// <summary>
@@ -178,7 +193,7 @@ public class GemCell : MonoBehaviour
     /// </summary>
     /// <param name="other"></param>
     /// <returns></returns>
-    public bool IsMatch(GemCell other)
+    public bool IsMatch(GemCell other, GemCell src = null)
     {
         if (!other.IsInPlay || !IsInPlay) return false;
         return other.Type == GemType.WILD || Type == GemType.WILD || other.m_colorIndex == m_colorIndex;
