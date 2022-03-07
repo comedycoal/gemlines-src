@@ -8,9 +8,10 @@ public class Scoreboard : MonoBehaviour
 {
     private int m_score;
 
-    [SerializeField] Text m_scoreText;
-
+    public string FormattedScore => m_score.ToString().PadLeft(6, '0');
     public int Score => m_score;
+
+    [SerializeField] Text m_scoreText;
 
     private void Start()
     {
@@ -43,7 +44,7 @@ public class Scoreboard : MonoBehaviour
 
     private void SetScoreText()
     {
-        m_scoreText.text = m_score.ToString().PadLeft(6, '0');
+        m_scoreText.text = FormattedScore;
     }
 
     private IEnumerator AddScoreCoroutine(int ballsHit)

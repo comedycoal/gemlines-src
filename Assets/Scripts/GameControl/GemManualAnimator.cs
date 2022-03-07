@@ -10,24 +10,135 @@ public class GemManualAnimator : MonoBehaviour
     [SerializeField] private SpriteRenderer m_extraRdr;
     [SerializeField] private GemCell m_main;
     [SerializeField] private ParticleSystem m_particleSystem;
+
     [SerializeField] private float m_destroyAnimTime = 0.5f;
     [SerializeField] private float m_shakeSpeed = 0.3f;
     [SerializeField] private float m_shakeAmount = 0.5f;
+    [SerializeField] private float m_ghostTransparencyThres = 0.8f;
+    [SerializeField] private float m_ghostTransparencyOscillationSpeed = 0.6f;
+    [SerializeField] private float m_wildSpeed = 0.2f;
+
+    [SerializeField] private Sprite m_cleanerHorizontal;
+    [SerializeField] private Sprite m_cleanerVertical;
+    [SerializeField] private Sprite m_blockSprite;
 
     private void Awake()
     {
         m_particleSystem.Stop();
     }
 
-    public void DoDestroyAnimation()
+    public void SetCleaner(bool horizontal)
+    {
+        m_extraRdr.sprite = horizontal ? m_cleanerHorizontal : m_cleanerVertical;
+    }
+
+    public void ClearCleaner()
+    {
+        m_extraRdr.sprite = null;
+    }
+
+    public void SetAsBlock(bool value, Color bColor)
+    {
+        if (value)
+        {
+            m_extraRdr.sprite = m_blockSprite;
+            m_extraRdr.color = bColor;
+        }
+        else
+        {
+            m_extraRdr.sprite = null;
+            m_extraRdr.color = Color.white;
+        }
+    }
+
+    private Coroutine m_wildMode;
+    private Color m_original;
+    private bool m_stopWild;
+    public void SetWildMode(Color original)
+    {
+        if (m_wildMode != null) return;
+        m_original = original;
+        m_stopWild = false;
+        var sprRdr = m_main.GetComponent<SpriteRenderer>();
+        m_wildMode = StartCoroutine(WildCoroutine(sprRdr));
+    }
+
+    public void CancelWildMode()
+    {
+        if (m_wildMode != null)
+        {
+            m_stopWild = true;
+            m_wildMode = null;
+        }
+    }
+
+    private IEnumerator WildCoroutine(SpriteRenderer rdr)
+    {
+        while (!m_stopWild)
+        {
+            rdr.color = Color.HSVToRGB(Time.time % 1.0f, 1.0f, 1.0f);
+            yield return null;
+        }
+
+        m_main.GetComponent<SpriteRenderer>().color = m_original;
+    }
+
+
+    private Coroutine m_ghostRoutine;
+    private bool m_stopGhost;
+    public void SetGhostMode()
+    {
+        if (m_ghostRoutine != null) return;
+        m_stopGhost = false;
+        var sprRdr = m_main.GetComponent<SpriteRenderer>();
+        m_ghostRoutine = StartCoroutine(GhostCoroutine(sprRdr));
+    }
+
+    public void CancelGhostMode()
+    {
+        if (m_ghostRoutine != null)
+        {
+            m_stopGhost = true;
+            m_ghostRoutine = null;
+        }
+    }
+
+    private IEnumerator GhostCoroutine(SpriteRenderer rdr)
+    {
+        while (!m_stopGhost)
+        {
+            Color color = rdr.color;
+            color.a = Mathf.Clamp01(0.5f + 0.5f * Mathf.Sin(m_ghostTransparencyOscillationSpeed * Time.time) * m_ghostTransparencyThres);
+            rdr.color = color;
+            yield return null;
+        }
+
+        Color a = rdr.color;
+        a.a = 1.0f;
+        rdr.color = a;
+    }
+
+
+    public void ClearSpecialEffects()
+    {
+        CancelWildMode();
+        CancelGhostMode();
+        ClearCleaner();
+        SetAsBlock(false, Color.white);
+    }
+
+
+    public void DoDestroyAnimation(float delayDestroyTime = -1.0f)
     {
         if (m_performing) return;
         m_performing = true;
-        StartCoroutine(DestroyCoroutine());
+        StartCoroutine(DestroyCoroutine(delayDestroyTime));
     }
 
-    private IEnumerator DestroyCoroutine()
+    private Sprite m_dummyFallSprite;
+    private IEnumerator DestroyCoroutine(float delayDestroyTime = -1.0f)
     {
+        if (delayDestroyTime > 0.0f) yield return new WaitForSeconds(delayDestroyTime);
         m_particleSystem.Stop();
 
         var main = m_particleSystem.main;
@@ -47,6 +158,9 @@ public class GemManualAnimator : MonoBehaviour
         }
         transform.position = originalPos;
 
+        m_dummyFallSprite = m_main.Type == GemCell.GemType.BLOCK ? m_extraRdr.sprite : GetComponent<SpriteRenderer>().sprite;
+        ClearSpecialEffects();
+
         DoRandomFall();
         m_main.Reset();
 
@@ -62,7 +176,7 @@ public class GemManualAnimator : MonoBehaviour
         var sprRdr = go.GetComponent<SpriteRenderer>();
         var rb = go.GetComponent<Rigidbody2D>();
 
-        sprRdr.sprite = GetComponent<SpriteRenderer>().sprite;
+        sprRdr.sprite = m_dummyFallSprite;
         sprRdr.color = GetComponent<SpriteRenderer>().color;
         rb.AddForce(force * 100f);
     }

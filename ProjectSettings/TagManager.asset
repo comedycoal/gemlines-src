@@ -43,9 +43,12 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Gems
+    uniqueID: 1837416981
+    locked: 0
   - name: UI
     uniqueID: 2755415049
     locked: 0
-  - name: Gems
-    uniqueID: 1837416981
+  - name: Particles
+    uniqueID: 1382597635
     locked: 0

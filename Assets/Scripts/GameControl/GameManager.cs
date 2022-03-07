@@ -8,18 +8,15 @@ public class GameManager : MonoBehaviour
     public enum Phase
     {
         NONE = 0,
+        DEBUG,
         GAME_START,
         TURN_START,
         PLAYER_TURN,
+        GAME_END,
         TIMEATK_STALLING,
         TIMEATK_POPULIZING
     }
 
-    public enum GameMode
-    {
-        NORMAL,
-        TIME_ATK
-    }
 
     //public class TaskCounter
     //{
@@ -47,15 +44,18 @@ public class GameManager : MonoBehaviour
 
 
     //################# Members
-    private GameMode m_gameMode;
+    private bool m_isTimeAtk;
     private int m_turnCount;
     private Phase m_currPhase;
+    private bool m_isPaused;
 
     // UI controls
     [SerializeField] private Timer m_timer;
     [SerializeField] private Previewer m_previewer;
     [SerializeField] private Scoreboard m_scoreboard;
     [SerializeField] private HighScoreboard m_highScoreboard;
+    [SerializeField] private GameOverBoardControl m_gameOverBoard;
+    [SerializeField] private GameObject m_pauseScreenObj;
 
     // Gameplay controls
     [SerializeField] private BoardController m_boardController;
@@ -67,16 +67,35 @@ public class GameManager : MonoBehaviour
 
     //################# Properties
     public Phase CurrentPhase => m_currPhase;
+    public bool IsInGame => CurrentPhase != Phase.NONE;
+    public bool IsTimeAttack => m_isTimeAtk;
     public bool IsDebug => m_debug;
+    public bool EditorOn { get; protected set; }
+    public int Turn => m_turnCount;
+    public bool IsPaused => m_isPaused;
 
 
     //################# Methods
     private void Awake()
     {
         Instance = this;
-        m_gameMode = GameMode.NORMAL;
+        m_isTimeAtk = false;
+
         // TODO: Load preferences, saved games, high scores.
 
+    }
+
+    public void NewGame()
+    {
+        m_gameOverBoard.HideBoard();
+        m_turnCount = 0;
+        SetPhase(Phase.GAME_START);
+    }
+
+    public void SetTimeAttack(bool value)
+    {
+        if (IsInGame && IsTimeAttack) return;
+        m_isTimeAtk = value;
     }
 
     private void OnBoardSetUp(object sender, EventArgs e)
@@ -103,8 +122,34 @@ public class GameManager : MonoBehaviour
 
     private void OnBoardFillled(object sender, EventArgs e)
     {
-        EndGame();
+        SetEndGame();
     }
+
+    public void SetEndGame()
+    {
+        SetPhase(Phase.GAME_END);
+    }
+
+    public void ToggleEditor()
+    {
+        if (IsDebug)
+        {
+            EditorOn = !EditorOn;
+            if (!EditorOn)
+            {
+                m_boardController.HitCheckAll();
+                m_boardController.EditorClick(null);
+            }
+        }
+    }
+
+    private void OnEnded(object sender, EventArgs e)
+    {
+        m_gameOverBoard.MakeBoard(m_scoreboard.FormattedScore, m_timer.FormattedTime, m_highScoreboard.HighScore < m_scoreboard.Score);
+        m_highScoreboard.HighScore = m_scoreboard.Score;
+        SetPhase(Phase.NONE);
+    }
+
 
     private void Start()
     {
@@ -112,6 +157,7 @@ public class GameManager : MonoBehaviour
         m_boardController.PreviewSetup += OnPreviewPopulated;
         m_boardController.PlayerTurnDone += OnPlayerTurnDone;
         m_boardController.BoardFillled += OnBoardFillled;
+        m_boardController.GameEndSequenceFinished += OnEnded;
 
         m_currPhase = Phase.NONE;
         EnterPhaseEvent?.Invoke(this, m_currPhase);
@@ -122,7 +168,7 @@ public class GameManager : MonoBehaviour
         m_boardController.BoardSetUp -= OnBoardSetUp;
         m_boardController.PreviewSetup -= OnPreviewPopulated;
         m_boardController.PlayerTurnDone -= OnPlayerTurnDone;
-        m_boardController.BoardFillled -= OnBoardFillled;
+        m_boardController.BoardFillled -= OnEnded;
     }
 
     private void SetPhase(Phase phase)
@@ -131,30 +177,12 @@ public class GameManager : MonoBehaviour
         EnterPhaseEvent?.Invoke(this, m_currPhase);
     }
 
-    public void NewGame()
+    public bool TogglePause()
     {
-        SetPhase(Phase.GAME_START);
-    }
-
-    public void PauseGame()
-    {
-        GamePaused?.Invoke(this, true);
-    }
-
-    public void ResumeGame()
-    {
-        GamePaused?.Invoke(this, false);
-    }
-
-
-    public void EndGame()
-    {
-        SetPhase(Phase.NONE);
-
-    }
-    public void SetToTimeAttack()
-    {
-        m_gameMode = GameMode.TIME_ATK;
+        m_isPaused = !m_isPaused;
+        GamePaused?.Invoke(this, m_isPaused);
+        m_pauseScreenObj.SetActive(m_isPaused);
+        return m_isPaused;
     }
 
     public void RegisterHit(int totalHitCount)

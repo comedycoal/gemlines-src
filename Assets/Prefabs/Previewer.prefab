@@ -344,6 +344,8 @@ MonoBehaviour:
   - {fileID: 2251172420620767854}
   - {fileID: 2251172420481195908}
   - {fileID: 2251172420368490374}
+  m_unknown: {fileID: -5462261288964553742, guid: d276477ff4ffd8a4e9cfacdd3f5433a8, type: 3}
+  m_normal: {fileID: -3184774412851926649, guid: d276477ff4ffd8a4e9cfacdd3f5433a8, type: 3}
 --- !u!222 &2251172421842125714
 CanvasRenderer:
   m_ObjectHideFlags: 0

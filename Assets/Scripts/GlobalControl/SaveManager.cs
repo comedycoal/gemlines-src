@@ -1,18 +1,19 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class SaveManager : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
+    public static SaveManager Instance { get; internal set; }
 
-    // Update is called once per frame
-    void Update()
+    [SerializeField] private BoardController m_board;
+    [SerializeField] private Timer m_timer;
+    [SerializeField] private Scoreboard m_scoreboard;
+    [SerializeField] private HighScoreboard m_highScoreboard;
+
+    public void SaveGame()
     {
-        
+        throw new NotImplementedException();
     }
 }

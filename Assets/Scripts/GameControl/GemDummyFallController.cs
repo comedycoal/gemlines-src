@@ -9,7 +9,7 @@ public class GemDummyFallController : MonoBehaviour
     private void Update()
     {
         time += Time.deltaTime;
-        if (time == 2.0f)
+        if (time >= 2.0f)
             Destroy(gameObject);
     }
 }

@@ -11,6 +11,9 @@ public class BoardController : MonoBehaviour
     [SerializeField] private int m_initialGemCount = 7;
     [SerializeField] private int m_newGemPerTurn = 3;
     [SerializeField] private float m_gemMovementTime = 0.2f;
+    [SerializeField] private float m_gameOverDestroyDelay = 1.5f;
+    [SerializeField] private float m_gameOverLineDelay = 0.1f;
+    [SerializeField] private float m_gameEndWait = 1.0f;
 
     private const int c_cellPixelSize = 18;
     private const int c_cellBorderPixelSize = 1;
@@ -22,6 +25,14 @@ public class BoardController : MonoBehaviour
 
     [SerializeField] private GameObject m_gemCellPrefab;
     [SerializeField] private GameObject m_gemCellDummyPrefab;
+
+    [SerializeField] private int m_normalWeight = 73;
+    [SerializeField] private int m_ghostWeight = 10;
+    [SerializeField] private int m_wildWeight = 10;
+    [SerializeField] private int m_cleanerWeight = 5;
+    [SerializeField] private int m_blockWeight = 2;
+
+    private int m_sumWeight;
 
     private GemCell[,] m_grid;
     private GemCell m_selectedCell;
@@ -48,9 +59,14 @@ public class BoardController : MonoBehaviour
     public event EventHandler PlayerTurnDone;
 
     /// <summary>
-    /// This event is invoked when the board is filled -> GameManager set Phase to NONE
+    /// This event is invoked when the board is filled -> GameManager set Phase to GAME_END
     /// </summary>
     public event EventHandler BoardFillled;
+
+    /// <summary>
+    /// This event is invoked when the game end animation is finished -> GameManager set Phase to NONE
+    /// </summary>
+    public event EventHandler GameEndSequenceFinished;
 
 
     //################# Methods
@@ -60,12 +76,13 @@ public class BoardController : MonoBehaviour
     {
         var collider = GetComponent<Collider2D>();
         m_boardWorldSpaceSize = collider.bounds.size.x;
-        m_topLeftCoord = new Vector3((c_cellPixelSize/2) / (float)c_boardPixelSize * m_boardWorldSpaceSize - m_boardWorldSpaceSize / 2,
-                                    -(c_cellPixelSize/2) / (float)c_boardPixelSize * m_boardWorldSpaceSize + m_boardWorldSpaceSize / 2, 0);
+        m_topLeftCoord = new Vector3((c_cellPixelSize / 2) / (float)c_boardPixelSize * m_boardWorldSpaceSize - m_boardWorldSpaceSize / 2,
+                                    -(c_cellPixelSize / 2) / (float)c_boardPixelSize * m_boardWorldSpaceSize + m_boardWorldSpaceSize / 2, 0);
 
         m_grid = new GemCell[m_boardSize, m_boardSize];
         m_rng = new System.Random(Environment.TickCount);
         CreateGameObjectGrid();
+        m_sumWeight = m_normalWeight + m_ghostWeight + m_wildWeight + m_cleanerWeight;
     }
 
     /// <summary>
@@ -94,6 +111,36 @@ public class BoardController : MonoBehaviour
         }
     }
 
+    public void HitCheckAll()
+    {
+        for (int i = 0; i < m_boardSize; i++)
+        {
+            for (int j = 0; j < m_boardSize; j++)
+            {
+                List<List<GemCell>> cellsToDestroy;
+                bool hit = HitCheck(m_grid[i,j], out cellsToDestroy, false);
+
+                if (hit)
+                {
+                    int count = 0;
+                    foreach (var line in cellsToDestroy)
+                    {
+                        foreach (var cell in line)
+                        {
+                            if (cell.HasGem)
+                            {
+                                count++;
+                                cell.DestroyGem();
+                                m_emptyCellSet.Add(cell); // Add back to empty set
+                            }
+                        }
+                    }
+                    GameManager.Instance.RegisterHit(count);
+                }
+            }
+        }
+    }
+
 
     //----------// Start set-up
     private void Start()
@@ -111,6 +158,49 @@ public class BoardController : MonoBehaviour
     }
 
 
+    //----------// Debug Editor methods
+    [SerializeField] GameObject m_editorSelectorObj;
+    private GemCell m_editorSelection = null;
+    private int m_editorPrevColor = -1;
+
+    public void EditorClick(GemCell gemCell)
+    {
+        if (gemCell != null)
+        {
+            m_editorSelection = gemCell;
+            m_editorSelectorObj.transform.position = m_editorSelection.transform.position;
+            m_editorPrevColor = Math.Max(gemCell.ColorIndex, 0);
+        }
+        else
+        {
+            m_editorSelectorObj.transform.position = new Vector3(-99.0f, -99.0f, 0f);
+            m_editorPrevColor = -1;
+        }
+    }
+
+    public void EditorCycleColor(int v)
+    {
+        if (m_editorSelection != null)
+        {
+            GemCell.GemType type = m_editorSelection.Type;
+            if (type == GemCell.GemType.NONE) type = GemCell.GemType.NORMAL;
+            m_editorPrevColor += v;
+            if (m_editorPrevColor >= GemCell.ColorCount) m_editorPrevColor = 0;
+            if (m_editorPrevColor < 0) m_editorPrevColor = GemCell.ColorCount - 1;
+            m_editorSelection.SetGemIdle(type, m_editorPrevColor);
+        }    
+    }
+
+    public void EditorCycleType(int v)
+    {
+        if (m_editorSelection != null)
+        {
+            int color = m_editorSelection.ColorIndex;
+            m_editorSelection.SetGemIdle(GemCell.CycleType(m_editorSelection.Type, v), m_editorPrevColor);
+        }
+    }
+
+
     /// <summary>
     /// Handle events from <see cref="GameManager"/>, each of which signifying a change in the game state.
     /// </summary>
@@ -118,7 +208,6 @@ public class BoardController : MonoBehaviour
     /// <param name="e">The current <see cref="GameManager.Phase"/> that the game is in</param>
     private void HandleGamePhaseEvent(object sender, GameManager.Phase e)
     {
-       if (GameManager.Instance.IsDebug) Debug.Log(e);
         if (e == GameManager.Phase.NONE)
         {
             m_allowPlayerControl = false;
@@ -127,19 +216,24 @@ public class BoardController : MonoBehaviour
         {
             Reset();
             m_allowPlayerControl = false;
-            InitiallyPopulate();
+            PopulatePreviewCells(m_initialGemCount);
             BoardSetUp?.Invoke(this, EventArgs.Empty);
         }
         else if (e == GameManager.Phase.TURN_START)
         {
             m_allowPlayerControl = false;
             ActualizePreviewedCells();
-            PopulatePreviewCells();
-            PreviewSetup?.Invoke(this, m_previewQueue.ConvertAll<Color>(x => x.GemColor).ToArray());
+            PopulatePreviewCells(m_newGemPerTurn);
+            PreviewSetup?.Invoke(this, m_previewQueue.ConvertAll(x => x.GemColor).ToArray());
         }
         else if (e == GameManager.Phase.PLAYER_TURN)
         {
             m_allowPlayerControl = true;
+        }
+        else if (e == GameManager.Phase.GAME_END)
+        {
+            m_allowPlayerControl = false;
+            HandleGameEnd();
         }
         else if (e == GameManager.Phase.TIMEATK_STALLING)
         {
@@ -153,10 +247,63 @@ public class BoardController : MonoBehaviour
 
     private void HandleGamePause(object sender, bool isPaused)
     {
+        var temp = new Vector3(0f, 0f, 1000.0f);
         if (isPaused)
+        {
             m_allowPlayerControl = false;
+            for (int i = 0; i < m_boardSize; i++)
+            {
+                for (int j = 0; j < m_boardSize; j++)
+                {
+                    m_grid[i, j].transform.position -= temp;
+                }
+            }
+        }
         else
+        {
             m_allowPlayerControl = true;
+            for (int i = 0; i < m_boardSize; i++)
+            {
+                for (int j = 0; j < m_boardSize; j++)
+                {
+                    m_grid[i, j].transform.position += temp;
+                }
+            }
+        }
+    }
+
+    private void HandleGameEnd()
+    {
+        StartCoroutine(GameEndCoroutine());
+    }
+
+    private IEnumerator GameEndCoroutine()
+    {
+        yield return new WaitForSeconds(m_gameEndWait);
+
+        for (int y = 0; y < m_boardSize; ++y)
+        {
+            int i = -1;
+            int j = y+1;
+            while (++i < m_boardSize && --j >= 0)
+                m_grid[i, j].SetAsDead(m_gameOverDestroyDelay);
+
+            yield return new WaitForSeconds(m_gameOverLineDelay);
+        }
+
+        for (int x = 0; x < m_boardSize-1; ++x)
+        {
+            int i = x;
+            int j = m_boardSize;
+            while (++i < m_boardSize && --j >= 0)
+                m_grid[i, j].SetAsDead(m_gameOverDestroyDelay);
+
+            yield return new WaitForSeconds(m_gameOverLineDelay);
+        }
+
+        yield return new WaitForSeconds(m_gameOverDestroyDelay);
+
+        GameEndSequenceFinished?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -181,40 +328,35 @@ public class BoardController : MonoBehaviour
     //----------// Gameplay flow set-up
 
     /// <summary>
-    /// Initially populate the game board with a fixed set of gems as previews.
-    /// These previews will be in play in the next game phase.
-    /// </summary>
-    private void InitiallyPopulate()
-    {
-        for (int i = 0; i < m_initialGemCount; ++i)
-        {
-            GemCell gemCell = PopAnEmptyGemCell();
-            m_previewQueue.Add(gemCell);
-            gemCell.SetAsPreview(GemCell.GemType.NORMAL, GetAppropriateGemColorIndex());
-        }
-    }
-
-    /// <summary>
     /// Set a fixed number of cells in the board with a type and color,
     /// but do not allow them to be in play yet.
     /// <para>The game over condition is checked inside this method</para>
     /// </summary>
-    private void PopulatePreviewCells()
+    private void PopulatePreviewCells(int count)
     {
-        for (int i = 0; i < m_newGemPerTurn; i++)
+        Color[] forPreview = new Color[count];
+        for (int i = 0; i < count; i++)
         {
             GemCell gemCell = PopAnEmptyGemCell();
             if (gemCell == null)
-            {
-                BoardFillled?.Invoke(this, EventArgs.Empty);
-                return;
-            }
+                break;
 
             m_previewQueue.Add(gemCell);
             gemCell.SetAsPreview(GetAppropriateGemType(), GetAppropriateGemColorIndex());
+            forPreview[i] = gemCell.GemColor;
         }
 
-        if (GameManager.Instance.IsDebug) Debug.Log("Empty cells: " + CountEmptyCells());
+        //if (GameManager.Instance.IsDebug) Debug.Log("Empty cells: " + CountEmptyCells());
+
+        if (m_previewQueue.Count == 0)
+        {
+            BoardFillled?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        for (int i = m_previewQueue.Count; i < forPreview.Length; ++i)
+            forPreview[i] = new Color(0f, 0f, 0f, 0f);
+        PreviewSetup?.Invoke(this, forPreview);
     }
 
     private void ActualizePreviewedCells()
@@ -226,7 +368,7 @@ public class BoardController : MonoBehaviour
 
             // Hit Check
             List<List<GemCell>> cellsToDestroy;
-            bool hit = HitCheck(m_previewQueue[i], out cellsToDestroy);
+            bool hit = HitCheck(m_previewQueue[i], out cellsToDestroy, false);
 
             if (hit)
             {
@@ -235,12 +377,13 @@ public class BoardController : MonoBehaviour
                 {
                     foreach (var cell in line)
                     {
-                        cell.DestroyGem();
-                        // Add points
-
-                        m_emptyCellSet.Add(cell); // Add back to empty set
+                        if (cell.HasGem)
+                        {
+                            count++;
+                            cell.DestroyGem();
+                            m_emptyCellSet.Add(cell); // Add back to empty set
+                        }
                     }
-                    count += line.Count;
                 }
                 GameManager.Instance.RegisterHit(count);
             }
@@ -255,12 +398,11 @@ public class BoardController : MonoBehaviour
         if (!m_allowPlayerControl)
             return;
 
-        if (GameManager.Instance.IsDebug) Debug.Log("Clicked " + gemCell.name);
         // If this is a move for selected GEM
-        if (m_selectedCell != null && m_selectedCell.IsInPlay)
+        if (m_selectedCell != null)
         {
             // If player want to move to an "empty" cell
-            if (!gemCell.IsInPlay)
+            if (gemCell.IsEmpty)
             {
                 var movePath = GetMovePath(m_selectedCell, gemCell);
 
@@ -273,8 +415,8 @@ public class BoardController : MonoBehaviour
 
                 m_selectedCell = null;
             }
-            // If player select another cell
-            else if (gemCell.IsSelectible && gemCell != m_selectedCell)
+            // If player select another gem
+            else if (gemCell != m_selectedCell && gemCell.HasGem && gemCell.IsSelectible)
             {
                 m_selectedCell.OnCancelSelected();
                 m_selectedCell = gemCell;
@@ -288,7 +430,7 @@ public class BoardController : MonoBehaviour
             }
         }
         // If player selected a new GEM
-        else if (gemCell.IsSelectible && gemCell.IsInPlay)
+        else if (gemCell.IsSelectible && gemCell.HasGem)
         {
             m_selectedCell = gemCell;
             m_selectedCell.OnSelected();
@@ -372,7 +514,7 @@ public class BoardController : MonoBehaviour
 
         // Hit check
         List<List<GemCell>> cellsToDestroy;
-        bool hit = HitCheck(dest, out cellsToDestroy);
+        bool hit = HitCheck(dest, out cellsToDestroy, true);
 
         // Hit: nothing happens, the saved previewed gem stays where it is
         if (hit)
@@ -382,12 +524,13 @@ public class BoardController : MonoBehaviour
             {
                 foreach (var cell in line)
                 {
-                    cell.DestroyGem();
-                    // Add points
-
-                    m_emptyCellSet.Add(cell); // Add back to empty set
+                    if (cell.HasGem)
+                    {
+                        count++;
+                        cell.DestroyGem();
+                        m_emptyCellSet.Add(cell); // Add back to empty set
+                    }
                 }
-                count += line.Count;
             }
 
             GameManager.Instance.RegisterHit(count);
@@ -493,24 +636,26 @@ public class BoardController : MonoBehaviour
         return list;
     }
 
-    private bool HitCheck(GemCell cell, out List<List<GemCell>> cellsToDestroy)
+    private bool HitCheck(GemCell cell, out List<List<GemCell>> cellsToDestroy, bool playerMove)
     {
         cellsToDestroy = new List<List<GemCell>>();
         int[] dx = { -1, -1, 0 , 1};
         int[] dy = { -1, 1, 1, 0 };
-        int[] explodeLeft = { -1, -1, -1, -1 };
-        int[] explodeRight = { -1, -1, -1, -1 };
 
+        string ds = "";
         for (int i = 0; i < 4; i++)
         {
+            int commonColor = -2;
             GemCell curr = cell;
             GemCell toCheck = null;
+            if (curr.ColorIndex >= 0 && commonColor < 0) commonColor = curr.ColorIndex;
             var row = new List<GemCell>();
             int x = cell.X() - dx[i], y = cell.Y() - dy[i];
+            
             while (IsInsideBoard(x, y))
             {
                 toCheck = m_grid[x, y];
-                if (!curr.IsMatch(toCheck))
+                if (!toCheck.IsMatch(curr, ref commonColor, cell, playerMove))
                     break;
 
                 row.Add(toCheck);
@@ -524,7 +669,7 @@ public class BoardController : MonoBehaviour
             while (IsInsideBoard(x, y))
             {
                 toCheck = m_grid[x, y];
-                if (!curr.IsMatch(toCheck))
+                if (!toCheck.IsMatch(curr, ref commonColor, cell, playerMove))
                     break;
 
                 row.Add(toCheck);
@@ -532,7 +677,7 @@ public class BoardController : MonoBehaviour
                 x = x + dx[i];
                 y = y + dy[i];
             }
-
+            ds += commonColor + ", ";
             if (row.Count + 1 >= 5) cellsToDestroy.Add(row); 
         }
 
@@ -571,7 +716,7 @@ public class BoardController : MonoBehaviour
 
     public int CountEmptyCells()
     {
-        return m_emptyCellSet.Count;
+        return m_emptyCellSet != null ? m_emptyCellSet.Count : m_boardSize*m_boardSize;
     }
 
     private GemCell PopAnEmptyGemCell()
@@ -589,8 +734,21 @@ public class BoardController : MonoBehaviour
 
     private GemCell.GemType GetAppropriateGemType()
     {
-        return GemCell.GemType.NORMAL;
+        if (GameManager.Instance.Turn <= 5) return GemCell.GemType.NORMAL;
+
+        int x = m_rng.Next(m_sumWeight);
+        if ((x -= m_cleanerWeight) < 0)
+            return m_rng.Next(0, 2) == 0 ? GemCell.GemType.CLEANER_HOR : GemCell.GemType.CLEANER_VER;
+        else if ((x -= m_wildWeight) < 0)
+            return GemCell.GemType.WILD;
+        else if ((x -= m_ghostWeight) < 0)
+            return GemCell.GemType.GHOST;
+        else if ((x -= m_blockWeight) < 0)
+            return GemCell.GemType.BLOCK;
+        else
+            return GemCell.GemType.NORMAL;
     }
+
     private int GetAppropriateGemColorIndex()
     {
         return UnityEngine.Random.Range(0, GemCell.ColorCount);

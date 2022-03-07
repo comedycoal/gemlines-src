@@ -7,11 +7,21 @@ public class GemCell : MonoBehaviour
 {
     public enum GemType
     {
-        NONE,
-        NORMAL,
-        GHOST,
-        WILD,
-        CLEANER
+        NONE = 0,
+        NORMAL = 1,
+        GHOST = 2,
+        WILD = 3,
+        CLEANER_HOR = 4,
+        CLEANER_VER = 5,
+        BLOCK = 6
+    }
+
+    public static GemType CycleType(GemType b, int v)
+    {
+        int val = (int)b + v;
+        if (val < 0) val = 6;
+        if (val > 6) val = 0;
+        return (GemType)(val);
     }
 
     public enum AnimState
@@ -29,8 +39,7 @@ public class GemCell : MonoBehaviour
     private GemType m_type;
     private int m_colorIndex;
 
-    private bool m_isInPlay;
-    private bool m_isSelectible;
+    private bool m_isPreview;
 
     private SpriteRenderer m_sprRdr;
     private Animator m_animator;
@@ -44,17 +53,15 @@ public class GemCell : MonoBehaviour
     public int ColorIndex => m_colorIndex;
     public Color GemColor => m_sprRdr.color;
 
-    /// <summary>
-    /// Retrieves whether a cell is in play.
-    /// A cell is in play if it has a gem (not a previewed one)
-    /// </summary>
-    public bool IsInPlay => m_isInPlay && Type != GemType.NONE;
+    public bool IsPreview => m_isPreview;
 
-    /// <summary>
-    /// Retrieves whether a cell is selecitble.
-    /// A cell is selectible if it is not undergoing the "SMALL_TO_BIG" animation
-    /// </summary>
-    public bool IsSelectible => m_isSelectible;
+    public bool IsEmpty => m_isPreview || Type == GemType.NONE;
+
+    public bool HasGem => !IsEmpty;
+
+    public bool IsSelectible => HasGem && Type != GemType.BLOCK;
+
+    public bool IsCleaner => m_type == GemType.CLEANER_HOR || m_type == GemType.CLEANER_VER;
 
     public int CummulativeGCost { get; set; }
     public GemCell PathFindingPrevNode { get; set; }
@@ -66,6 +73,7 @@ public class GemCell : MonoBehaviour
         m_sprRdr = GetComponent<SpriteRenderer>();
         m_animator = GetComponent<Animator>();
         m_sprRdr.sprite = null;
+
     }
 
     private void Start()
@@ -83,10 +91,7 @@ public class GemCell : MonoBehaviour
     /// </summary>
     public void OnSelected()
     {
-        if (m_isSelectible)
-        {
-            m_animator.SetBool("Pulsing", true);
-        }
+        m_animator.SetBool("Pulsing", true);
     }
 
     /// <summary>
@@ -99,20 +104,48 @@ public class GemCell : MonoBehaviour
 
     private void SetGem(GemType type, int colorIndex)
     {
+        m_colorIndex = colorIndex % m_colorSet.Colors.Length;
         m_type = type;
-        m_colorIndex = colorIndex;
 
-        // TODO: Change sprites, anims, and all that
-        if (colorIndex == -1)
+        m_manualAnimator.ClearSpecialEffects();
+
+        if (m_type == GemType.GHOST)
         {
+            m_manualAnimator.SetGhostMode();
+            m_sprRdr.color = m_colorSet.GetColor(colorIndex);
+        }
+        else if (m_type == GemType.CLEANER_HOR)
+        {
+            m_manualAnimator.SetCleaner(true);
+            m_colorIndex = -2;
             m_sprRdr.color = Color.white;
         }
-        else if (type == GemType.WILD)
+        else if (m_type == GemType.CLEANER_VER)
         {
-            // TO DO: rapid color switch
+            m_manualAnimator.SetCleaner(false);
+            m_colorIndex = -2;
+            m_sprRdr.color = Color.white;
+        }
+        else if (m_type == GemType.WILD)
+        {
+            m_colorIndex = -1;
+            m_manualAnimator.SetWildMode(Color.white);
+            m_sprRdr.color = Color.white;
+        }
+        else if (m_type == GemType.BLOCK)
+        {
+            m_colorIndex = -2;
+            m_sprRdr.color = m_colorSet.DeadColor;
+        }
+        else if (m_type == GemType.NONE)
+        {
+            m_colorIndex = -2;
+            m_sprRdr.color = m_colorSet.NullColor;
         }
         else
+        {
             m_sprRdr.color = m_colorSet.GetColor(colorIndex);
+        }
     }
 
     /// <summary>
@@ -122,8 +155,7 @@ public class GemCell : MonoBehaviour
     /// <param name="colorIndex">The color of the gem to set</param>
     public void SetAsPreview(GemType type, int colorIndex)
     {
-        m_isInPlay = false;
-        m_isSelectible = true;
+        m_isPreview = true;
         m_animator.SetInteger("TransitionState", (int)AnimState.SMALL);
         SetGem(type, colorIndex);
     }
@@ -136,11 +168,11 @@ public class GemCell : MonoBehaviour
     /// <param name="colorIndex"></param>
     public void SetGemIdle(GemType type, int colorIndex)
     {
-        m_isInPlay = true;
-        m_isSelectible = true;
+        m_isPreview = false;
         m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
         m_animator.SetTrigger("ImmediatePopup");
         SetGem(type, colorIndex);
+        if (Type == GemType.BLOCK) m_manualAnimator.SetAsBlock(true, m_colorSet.DeadColor);
     }
 
     /// <summary>
@@ -149,13 +181,9 @@ public class GemCell : MonoBehaviour
     /// </summary>
     public void ActualizeFromPreview()
     {
-        m_isInPlay = true;
+        m_isPreview = false;
         m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
-    }
-
-    public void SetSelectible(bool value)
-    {
-        m_isSelectible = value;
+        if (Type == GemType.BLOCK) m_manualAnimator.SetAsBlock(true, m_colorSet.DeadColor);
     }
 
     /// <summary>
@@ -163,24 +191,34 @@ public class GemCell : MonoBehaviour
     /// </summary>
     public void Reset()
     {
-        SetGem(GemType.NONE, -1);
-        m_isInPlay = false;
-        m_isSelectible = true;
-        m_animator.SetInteger("TransitionState", 0);
-        m_animator.Play("Gem_null");
+        SetGem(GemType.NONE, -2);
+        m_isPreview = false;
+        m_animator.SetBool("Pulsing", false);
+        m_animator.SetInteger("TransitionState", (int)AnimState.NULL);
     }
 
     /// <summary>
     /// Destroy the gem at the cell (if any).
     /// </summary>
-    public void DestroyGem()
+    public void DestroyGem(float delayDestroyTime = -1.0f, bool forceDestroy = false)
     {
-        if (IsInPlay)
+        if (HasGem)
         {
             // Play egregious animation
-            m_manualAnimator.DoDestroyAnimation();
-            
+            m_manualAnimator.DoDestroyAnimation(delayDestroyTime);
+            return;
         }
+
+        if (forceDestroy)
+        {
+            Reset();
+        }
+    }
+
+    public void SetAsDead(float delayDestroyTime = -1.0f)
+    {
+        m_sprRdr.color = m_colorSet.DeadColor;
+        DestroyGem(delayDestroyTime, true);
     }
 
     /// <summary>
@@ -193,10 +231,18 @@ public class GemCell : MonoBehaviour
     /// </summary>
     /// <param name="other"></param>
     /// <returns></returns>
-    public bool IsMatch(GemCell other, GemCell src = null)
+    public bool IsMatch(GemCell other, ref int commonColorIdx, GemCell src = null, bool playerMove = true)
     {
-        if (!other.IsInPlay || !IsInPlay) return false;
-        return other.Type == GemType.WILD || Type == GemType.WILD || other.m_colorIndex == m_colorIndex;
+        if (src != null && src.IsCleaner && playerMove)
+            if (src.Type == GemType.CLEANER_HOR) return other.X() == src.X();
+            else return other.Y() == src.Y();
+
+        if (IsEmpty || other.IsEmpty) return false;
+
+        // Check against common color
+        if (commonColorIdx < 0 && ColorIndex >= 0) commonColorIdx = ColorIndex;
+        return ((commonColorIdx >= 0 && ColorIndex >= 0 && commonColorIdx == ColorIndex)
+            || (Type == GemType.WILD && other.ColorIndex >= -1));
     }
 
     public void setBoardPos(int x, int y)
@@ -223,6 +269,6 @@ public class GemCell : MonoBehaviour
     public bool IsBlocking(GemCell src)
     {
         if (src.Type == GemType.GHOST) return false;
-        return IsInPlay;
+        return Type != GemType.GHOST && HasGem;
     }
 }

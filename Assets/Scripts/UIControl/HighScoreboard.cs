@@ -2,23 +2,39 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class HighScoreboard : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
+    private int m_topScore = 0;
+
+    private string FormattedHighScore => m_topScore.ToString().PadLeft(6, '0');
+    public int HighScore
+    { 
+        get { return m_topScore; }
+        set
+        {
+            if (m_topScore < value)
+            {
+                m_topScore = value;
+                SetScoreText();
+            }
+        }
     }
 
-    // Update is called once per frame
-    void Update()
+    [SerializeField] private Text m_scoreText;
+
+    private void Start()
     {
-        
+        // Load topScore
+
+
+        if (m_topScore >= 0)
+            SetScoreText();
     }
 
-    public void Set(int score)
+    private void SetScoreText()
     {
-        
+        m_scoreText.text = FormattedHighScore;
     }
 }
