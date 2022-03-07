@@ -5,6 +5,9 @@ using UnityEngine;
 public class InputHandler : MonoBehaviour
 {
     [SerializeField] private BoardController m_board;
+    [SerializeField] private float m_continuousInputDelay = 0.25f;
+
+    private float m_inputWait;
 
     private void Start()
     {
@@ -38,6 +41,8 @@ public class InputHandler : MonoBehaviour
 
     private void Update()
     {
+        m_inputWait += Time.deltaTime;
+
         if (Input.GetMouseButtonDown(0))
         {
             var gemCell = RegisterHit();
@@ -48,24 +53,30 @@ public class InputHandler : MonoBehaviour
             }
         }
 
-        if (GameManager.Instance.EditorOn)
+        if (GameManager.Instance.EditorOn && m_inputWait >= m_continuousInputDelay)
         {
-            if (Input.GetKeyDown(KeyCode.UpArrow))
+            bool inputted = true;
+            if (Input.GetKey(KeyCode.UpArrow))
             {
                 m_board.EditorCycleColor(1);
             }
-            else if (Input.GetKeyDown(KeyCode.DownArrow))
+            else if (Input.GetKey(KeyCode.DownArrow))
             {
                 m_board.EditorCycleColor(-1);
             }
-            else if (Input.GetKeyDown(KeyCode.LeftArrow))
+            else if (Input.GetKey(KeyCode.LeftArrow))
             {
                 m_board.EditorCycleType(-1);
             }
-            else if (Input.GetKeyDown(KeyCode.RightArrow))
+            else if (Input.GetKey(KeyCode.RightArrow))
             {
                 m_board.EditorCycleType(1);
             }
+            else
+                inputted = false;
+
+            if (inputted)
+                m_inputWait = 0;
         }
 
         if (Input.GetKeyDown(KeyCode.F2))

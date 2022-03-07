@@ -167,7 +167,7 @@ MonoBehaviour:
   m_shakeAmount: 0.8
   m_ghostTransparencyThres: 0.5
   m_ghostTransparencyOscillationSpeed: 5
-  m_wildSpeed: 5
+  m_wildSpeed: 1.5
   m_cleanerHorizontal: {fileID: 8724465716410009851, guid: d276477ff4ffd8a4e9cfacdd3f5433a8, type: 3}
   m_cleanerVertical: {fileID: 3489835571124678753, guid: d276477ff4ffd8a4e9cfacdd3f5433a8, type: 3}
   m_blockSprite: {fileID: 5912635565260956295, guid: d276477ff4ffd8a4e9cfacdd3f5433a8, type: 3}
@@ -1088,7 +1088,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 50
+      scalar: 40
       minScalar: 10
       maxCurve:
         serializedVersion: 2

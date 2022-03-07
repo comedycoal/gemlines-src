@@ -73,12 +73,12 @@ public class GemCell : MonoBehaviour
         m_sprRdr = GetComponent<SpriteRenderer>();
         m_animator = GetComponent<Animator>();
         m_sprRdr.sprite = null;
-
+        Reset();
     }
 
     private void Start()
     {
-        Reset();
+        
     }
 
     private void Update()
@@ -107,7 +107,7 @@ public class GemCell : MonoBehaviour
         m_colorIndex = colorIndex % m_colorSet.Colors.Length;
         m_type = type;
 
-        m_manualAnimator.ClearSpecialEffects();
+        m_manualAnimator.ClearSpecialEffects(m_colorSet.GetColor(m_colorIndex));
 
         if (m_type == GemType.GHOST)
         {
@@ -142,9 +142,9 @@ public class GemCell : MonoBehaviour
             m_colorIndex = -2;
             m_sprRdr.color = m_colorSet.NullColor;
         }
-        else
+        else if (m_type == GemType.NORMAL)
         {
-            m_sprRdr.color = m_colorSet.GetColor(colorIndex);
+            m_sprRdr.color = m_colorSet.GetColor(m_colorIndex);
         }
     }
 
@@ -169,8 +169,8 @@ public class GemCell : MonoBehaviour
     public void SetGemIdle(GemType type, int colorIndex)
     {
         m_isPreview = false;
-        m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
         m_animator.SetTrigger("ImmediatePopup");
+        m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
         SetGem(type, colorIndex);
         if (Type == GemType.BLOCK) m_manualAnimator.SetAsBlock(true, m_colorSet.DeadColor);
     }
@@ -200,12 +200,12 @@ public class GemCell : MonoBehaviour
     /// <summary>
     /// Destroy the gem at the cell (if any).
     /// </summary>
-    public void DestroyGem(float delayDestroyTime = -1.0f, bool forceDestroy = false)
+    public void DestroyGem(float delayDestroyTime = -1.0f, bool forceDestroy = false, GemType replaceType = GemType.NONE, int color = -1, bool isPreview = false)
     {
         if (HasGem)
         {
             // Play egregious animation
-            m_manualAnimator.DoDestroyAnimation(delayDestroyTime);
+            m_manualAnimator.DoDestroyAnimation(delayDestroyTime, replaceType, color, isPreview);
             return;
         }
 
@@ -233,11 +233,12 @@ public class GemCell : MonoBehaviour
     /// <returns></returns>
     public bool IsMatch(GemCell other, ref int commonColorIdx, GemCell src = null, bool playerMove = true)
     {
+        // For cleaner only
         if (src != null && src.IsCleaner && playerMove)
             if (src.Type == GemType.CLEANER_HOR) return other.X() == src.X();
             else return other.Y() == src.Y();
 
-        if (IsEmpty || other.IsEmpty) return false;
+        if (IsEmpty || other.IsEmpty || IsCleaner) return false;
 
         // Check against common color
         if (commonColorIdx < 0 && ColorIndex >= 0) commonColorIdx = ColorIndex;
@@ -270,5 +271,12 @@ public class GemCell : MonoBehaviour
     {
         if (src.Type == GemType.GHOST) return false;
         return Type != GemType.GHOST && HasGem;
+    }
+
+    public int Score()
+    {
+        if (Type == GemType.WILD) return 30;
+        if (Type == GemType.BLOCK) return 100;
+        else return 10;
     }
 }

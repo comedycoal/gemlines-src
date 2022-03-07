@@ -22,24 +22,11 @@ public class ButtonController : MonoBehaviour
                 m_image.color = Color.red;
                 GameManager.Instance.NewGame();
             }
-            else
+            else if (GameManager.Instance.CurrentPhase != GameManager.Phase.GAME_END)
             {
-                m_title.text = "";
+                m_title.text = "New Game";
+                m_image.color = Color.white;
                 GameManager.Instance.SetEndGame();
-                m_gamePhaseAdhocHandler = (s, e) => 
-                {
-                    if (e == GameManager.Phase.NONE)
-                    {
-                        m_title.text = "New Game";
-                        m_image.color = Color.white;
-                        if (m_gamePhaseAdhocHandler != null)
-                        {
-                            GameManager.Instance.EnterPhaseEvent -= m_gamePhaseAdhocHandler;
-                            m_gamePhaseAdhocHandler = null;
-                        }
-                    }
-                };
-                GameManager.Instance.EnterPhaseEvent += m_gamePhaseAdhocHandler;
             }
         }
         else if (m_name == "time_atk")
@@ -49,7 +36,7 @@ public class ButtonController : MonoBehaviour
                 m_title.color = Color.green;
                 GameManager.Instance.SetTimeAttack(true);
             }
-            else if (GameManager.Instance.IsInGame)
+            else if (!GameManager.Instance.IsInGame)
             {
                 m_title.color = Color.white;
                 GameManager.Instance.SetTimeAttack(false);
@@ -58,15 +45,20 @@ public class ButtonController : MonoBehaviour
         else if (m_name == "pause")
         {
             if (!GameManager.Instance.IsInGame) return;
-            bool isPaused = GameManager.Instance.TogglePause();
-            if (isPaused)
+            if (GameManager.Instance.IsPaused)
             {
-                m_title.text = "Resume";
+                m_title.text = "Pause";
+                GameManager.Instance.SetPauseState(false);
             }
             else
             {
-                m_title.text = "Pause";
+                m_title.text = "Resume";
+                GameManager.Instance.SetPauseState(true);
             }
+        }
+        else if (m_name == "help")
+        {
+            GameManager.Instance.ShowTutorial();
         }
         else if (m_name == "exit")
         {

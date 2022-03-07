@@ -76,7 +76,7 @@ public class GemManualAnimator : MonoBehaviour
     {
         while (!m_stopWild)
         {
-            rdr.color = Color.HSVToRGB(Time.time % 1.0f, 1.0f, 1.0f);
+            rdr.color = Color.HSVToRGB((Time.time * m_wildSpeed) % 1.0f, 1.0f, 1.0f);
             yield return null;
         }
 
@@ -119,24 +119,26 @@ public class GemManualAnimator : MonoBehaviour
     }
 
 
-    public void ClearSpecialEffects()
+    public void ClearSpecialEffects(Color colorToReset)
     {
+        m_original = colorToReset;
+        SetAsBlock(false, Color.white);
         CancelWildMode();
         CancelGhostMode();
         ClearCleaner();
-        SetAsBlock(false, Color.white);
     }
 
 
-    public void DoDestroyAnimation(float delayDestroyTime = -1.0f)
+    public void DoDestroyAnimation(float delayDestroyTime = -1.0f, GemCell.GemType replaceType = GemCell.GemType.NONE, int color = -1, bool isPreview = false)
     {
         if (m_performing) return;
         m_performing = true;
-        StartCoroutine(DestroyCoroutine(delayDestroyTime));
+        StartCoroutine(DestroyCoroutine(delayDestroyTime, replaceType, color, isPreview));
     }
 
+
     private Sprite m_dummyFallSprite;
-    private IEnumerator DestroyCoroutine(float delayDestroyTime = -1.0f)
+    private IEnumerator DestroyCoroutine(float delayDestroyTime = -1.0f, GemCell.GemType replaceType = GemCell.GemType.NONE, int color = -1, bool isPreview = false)
     {
         if (delayDestroyTime > 0.0f) yield return new WaitForSeconds(delayDestroyTime);
         m_particleSystem.Stop();
@@ -159,10 +161,17 @@ public class GemManualAnimator : MonoBehaviour
         transform.position = originalPos;
 
         m_dummyFallSprite = m_main.Type == GemCell.GemType.BLOCK ? m_extraRdr.sprite : GetComponent<SpriteRenderer>().sprite;
-        ClearSpecialEffects();
+        ClearSpecialEffects(m_main.GemColor);
 
         DoRandomFall();
         m_main.Reset();
+        if (replaceType != GemCell.GemType.NONE)
+        {
+            if (isPreview)
+                m_main.SetAsPreview(replaceType, color);
+            else
+                m_main.SetGemIdle(replaceType, color);
+        }
 
         m_performing = false;
     }

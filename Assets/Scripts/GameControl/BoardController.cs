@@ -7,7 +7,7 @@ using UnityEngine;
 public class BoardController : MonoBehaviour
 {
     //################# Members
-    [SerializeField] private int m_boardSize = 9;
+    private const int c_boardSize = 9;
     [SerializeField] private int m_initialGemCount = 7;
     [SerializeField] private int m_newGemPerTurn = 3;
     [SerializeField] private float m_gemMovementTime = 0.2f;
@@ -79,10 +79,11 @@ public class BoardController : MonoBehaviour
         m_topLeftCoord = new Vector3((c_cellPixelSize / 2) / (float)c_boardPixelSize * m_boardWorldSpaceSize - m_boardWorldSpaceSize / 2,
                                     -(c_cellPixelSize / 2) / (float)c_boardPixelSize * m_boardWorldSpaceSize + m_boardWorldSpaceSize / 2, 0);
 
-        m_grid = new GemCell[m_boardSize, m_boardSize];
+        m_grid = new GemCell[c_boardSize, c_boardSize];
         m_rng = new System.Random(Environment.TickCount);
         CreateGameObjectGrid();
         m_sumWeight = m_normalWeight + m_ghostWeight + m_wildWeight + m_cleanerWeight;
+        m_emptyCellSet = new HashSet<GemCell>();
     }
 
     /// <summary>
@@ -93,9 +94,9 @@ public class BoardController : MonoBehaviour
         Vector3 colliderSize = new Vector3((float)c_cellPixelSize / c_boardPixelSize * m_boardWorldSpaceSize,
                                            (float)c_cellPixelSize / c_boardPixelSize * m_boardWorldSpaceSize, 0);
 
-        for (int i = 0; i < m_boardSize; i++)
+        for (int i = 0; i < c_boardSize; i++)
         {
-            for (int j = 0; j < m_boardSize; j++)
+            for (int j = 0; j < c_boardSize; j++)
             {
                 var go = Instantiate(m_gemCellPrefab);
                 go.name = "Gem Cell " + i + j;
@@ -113,9 +114,9 @@ public class BoardController : MonoBehaviour
 
     public void HitCheckAll()
     {
-        for (int i = 0; i < m_boardSize; i++)
+        for (int i = 0; i < c_boardSize; i++)
         {
-            for (int j = 0; j < m_boardSize; j++)
+            for (int j = 0; j < c_boardSize; j++)
             {
                 List<List<GemCell>> cellsToDestroy;
                 bool hit = HitCheck(m_grid[i,j], out cellsToDestroy, false);
@@ -129,13 +130,13 @@ public class BoardController : MonoBehaviour
                         {
                             if (cell.HasGem)
                             {
-                                count++;
+                                count+=cell.Score();
                                 cell.DestroyGem();
                                 m_emptyCellSet.Add(cell); // Add back to empty set
                             }
                         }
                     }
-                    GameManager.Instance.RegisterHit(count);
+                    GameManager.Instance.RegisterScore(count);
                 }
             }
         }
@@ -155,6 +156,58 @@ public class BoardController : MonoBehaviour
     {
         GameManager.Instance.EnterPhaseEvent -= HandleGamePhaseEvent;
         GameManager.Instance.GamePaused -= HandleGamePause;
+    }
+
+    private const int GUARD = 20;
+    public void LoadFromStrings(string state1, string state2)
+    {
+        int i = 0;
+        m_previewQueue = new List<GemCell>();
+        while (i < c_boardSize * c_boardSize)
+        {
+            GemCell curr = m_grid[i / c_boardSize, i % c_boardSize];
+            bool isPreview = false;
+            char encoded = state1[i];
+            if (char.IsUpper(encoded))
+            {
+                isPreview = true;
+                encoded = char.ToLower(encoded);
+            }
+
+            GemCell.GemType type = (GemCell.GemType)(encoded - 'a');
+            int color = state2[i] - '0';
+
+            if (isPreview)
+            {
+                m_previewQueue.Add(curr);
+                curr.SetAsPreview(type, color);
+            }
+            else
+                curr.SetGemIdle(type, color);
+
+            if (curr.Type == GemCell.GemType.NONE)
+                m_emptyCellSet.Add(curr);
+
+            ++i;
+        }
+
+        PreviewSetup?.Invoke(this, m_previewQueue.ConvertAll(x => x.GemColor).ToArray());
+    }
+
+    public void StringifyBoardState(out string state1, out string state2)
+    {
+        state1 = "";
+        state2 = "";
+        for (int i = 0; i < c_boardSize; i++)
+        {
+            for (int j = 0; j < c_boardSize; j++)
+            {
+                char type = (char)('a' + (int)m_grid[i, j].Type);
+                if (m_grid[i, j].IsPreview) type = char.ToUpper(type);
+                state1 += type;
+                state2 += Math.Max(0, m_grid[i, j].ColorIndex);
+            }
+        }
     }
 
 
@@ -221,10 +274,14 @@ public class BoardController : MonoBehaviour
         }
         else if (e == GameManager.Phase.TURN_START)
         {
+            if (m_selectedCell != null)
+            {
+                m_selectedCell.OnCancelSelected();
+                m_selectedCell = null;
+            }
             m_allowPlayerControl = false;
             ActualizePreviewedCells();
             PopulatePreviewCells(m_newGemPerTurn);
-            PreviewSetup?.Invoke(this, m_previewQueue.ConvertAll(x => x.GemColor).ToArray());
         }
         else if (e == GameManager.Phase.PLAYER_TURN)
         {
@@ -235,14 +292,6 @@ public class BoardController : MonoBehaviour
             m_allowPlayerControl = false;
             HandleGameEnd();
         }
-        else if (e == GameManager.Phase.TIMEATK_STALLING)
-        {
-            m_allowPlayerControl = true;
-        }
-        else if (e == GameManager.Phase.TIMEATK_POPULIZING)
-        {
-            m_allowPlayerControl = false;
-        }
     }
 
     private void HandleGamePause(object sender, bool isPaused)
@@ -251,9 +300,9 @@ public class BoardController : MonoBehaviour
         if (isPaused)
         {
             m_allowPlayerControl = false;
-            for (int i = 0; i < m_boardSize; i++)
+            for (int i = 0; i < c_boardSize; i++)
             {
-                for (int j = 0; j < m_boardSize; j++)
+                for (int j = 0; j < c_boardSize; j++)
                 {
                     m_grid[i, j].transform.position -= temp;
                 }
@@ -262,9 +311,9 @@ public class BoardController : MonoBehaviour
         else
         {
             m_allowPlayerControl = true;
-            for (int i = 0; i < m_boardSize; i++)
+            for (int i = 0; i < c_boardSize; i++)
             {
-                for (int j = 0; j < m_boardSize; j++)
+                for (int j = 0; j < c_boardSize; j++)
                 {
                     m_grid[i, j].transform.position += temp;
                 }
@@ -281,21 +330,21 @@ public class BoardController : MonoBehaviour
     {
         yield return new WaitForSeconds(m_gameEndWait);
 
-        for (int y = 0; y < m_boardSize; ++y)
+        for (int y = 0; y < c_boardSize; ++y)
         {
             int i = -1;
             int j = y+1;
-            while (++i < m_boardSize && --j >= 0)
+            while (++i < c_boardSize && --j >= 0)
                 m_grid[i, j].SetAsDead(m_gameOverDestroyDelay);
 
             yield return new WaitForSeconds(m_gameOverLineDelay);
         }
 
-        for (int x = 0; x < m_boardSize-1; ++x)
+        for (int x = 0; x < c_boardSize-1; ++x)
         {
             int i = x;
-            int j = m_boardSize;
-            while (++i < m_boardSize && --j >= 0)
+            int j = c_boardSize;
+            while (++i < c_boardSize && --j >= 0)
                 m_grid[i, j].SetAsDead(m_gameOverDestroyDelay);
 
             yield return new WaitForSeconds(m_gameOverLineDelay);
@@ -314,10 +363,10 @@ public class BoardController : MonoBehaviour
         ClearGrid();
         m_previewQueue = new List<GemCell>();
         m_selectedCell = null;
-        m_emptyCellSet = new HashSet<GemCell>();
-        for (int i = 0; i < m_boardSize; i++)
+        m_emptyCellSet.Clear();
+        for (int i = 0; i < c_boardSize; i++)
         {
-            for (int j = 0; j < m_boardSize; j++)
+            for (int j = 0; j < c_boardSize; j++)
             {
                 m_emptyCellSet.Add(m_grid[i, j]);
             }
@@ -379,13 +428,13 @@ public class BoardController : MonoBehaviour
                     {
                         if (cell.HasGem)
                         {
-                            count++;
+                            count += cell.Score();
                             cell.DestroyGem();
                             m_emptyCellSet.Add(cell); // Add back to empty set
                         }
                     }
                 }
-                GameManager.Instance.RegisterHit(count);
+                GameManager.Instance.RegisterScore(count);
             }
         }
         m_previewQueue.Clear();
@@ -516,7 +565,6 @@ public class BoardController : MonoBehaviour
         List<List<GemCell>> cellsToDestroy;
         bool hit = HitCheck(dest, out cellsToDestroy, true);
 
-        // Hit: nothing happens, the saved previewed gem stays where it is
         if (hit)
         {
             int count = 0;
@@ -526,14 +574,24 @@ public class BoardController : MonoBehaviour
                 {
                     if (cell.HasGem)
                     {
-                        count++;
-                        cell.DestroyGem();
-                        m_emptyCellSet.Add(cell); // Add back to empty set
+                        count += cell.Score();
+                        if (cell == dest)
+                        {
+                            cell.DestroyGem(-1, false, typePreview, colorIdxPreview, true);
+                        }
+                        else
+                        {
+                            cell.DestroyGem();
+                            m_emptyCellSet.Add(cell); // Add back to empty set
+                        }
                     }
                 }
             }
 
-            GameManager.Instance.RegisterHit(count);
+            // Since the moved gem is destroy, recreate the previewed gem at its own place;
+
+
+            GameManager.Instance.RegisterScore(count);
 
             m_allowPlayerControl = true;
         }
@@ -551,7 +609,10 @@ public class BoardController : MonoBehaviour
                 m_previewQueue[replacementIndex].SetAsPreview(typePreview, colorIdxPreview);
             }
 
-            PlayerTurnDone?.Invoke(this, EventArgs.Empty);
+            if (!GameManager.Instance.IsTimeAttack)
+                PlayerTurnDone?.Invoke(this, EventArgs.Empty);
+            else
+                m_allowPlayerControl = true;
         }
     }
 
@@ -561,9 +622,9 @@ public class BoardController : MonoBehaviour
         HashSet<GemCell> openSet = new HashSet<GemCell> { src };
         HashSet<GemCell> closedSet = new HashSet<GemCell>();
 
-        for (int i = 0; i < m_boardSize; i++)
+        for (int i = 0; i < c_boardSize; i++)
         {
-            for (int j = 0; j < m_boardSize; j++)
+            for (int j = 0; j < c_boardSize; j++)
             {
                 m_grid[i, j].PathFindingPrevNode = null;
                 m_grid[i, j].CummulativeGCost = 99999;
@@ -664,6 +725,12 @@ public class BoardController : MonoBehaviour
                 y = y - dy[i];
             }
 
+
+            curr = cell;
+            toCheck = null;
+            if (row.Count == 0) commonColor = -2;
+            if (curr.ColorIndex >= 0 && commonColor < 0) commonColor = curr.ColorIndex;
+
             x = cell.X() + dx[i];
             y = cell.Y() + dy[i];
             while (IsInsideBoard(x, y))
@@ -688,9 +755,9 @@ public class BoardController : MonoBehaviour
 
     private void ClearGrid()
     {
-        for (int i = 0; i < m_boardSize; i++)
+        for (int i = 0; i < c_boardSize; i++)
         {
-            for (int j = 0; j < m_boardSize; j++)
+            for (int j = 0; j < c_boardSize; j++)
             {
                 m_grid[i, j].Reset();
             }
@@ -701,7 +768,7 @@ public class BoardController : MonoBehaviour
     //-----------// Helper functions
     private bool IsInsideBoard(int x, int y)
     {
-        return x >= 0 && x < m_boardSize && y >= 0 && y < m_boardSize;
+        return x >= 0 && x < c_boardSize && y >= 0 && y < c_boardSize;
     }
 
     private Vector3 GetLocalPos(int x, int y)
@@ -716,7 +783,7 @@ public class BoardController : MonoBehaviour
 
     public int CountEmptyCells()
     {
-        return m_emptyCellSet != null ? m_emptyCellSet.Count : m_boardSize*m_boardSize;
+        return m_emptyCellSet != null ? m_emptyCellSet.Count : c_boardSize*c_boardSize;
     }
 
     private GemCell PopAnEmptyGemCell()

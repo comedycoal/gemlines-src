@@ -9,7 +9,7 @@ public class Scoreboard : MonoBehaviour
     private int m_score;
 
     public string FormattedScore => m_score.ToString().PadLeft(6, '0');
-    public int Score => m_score;
+    public int Score { get => m_score; set { m_score = value; SetScoreText(); } }
 
     [SerializeField] Text m_scoreText;
 
@@ -37,30 +37,13 @@ public class Scoreboard : MonoBehaviour
         SetScoreText();
     }
 
-    public void AddScore(int ballsHit)
+    public void AddScore(int score)
     {
-        StartCoroutine(AddScoreCoroutine(ballsHit));
+        m_score += score;
     }
 
     private void SetScoreText()
     {
         m_scoreText.text = FormattedScore;
-    }
-
-    private IEnumerator AddScoreCoroutine(int ballsHit)
-    {
-        int value = 1;
-        int thres = 5;
-        while (ballsHit > 0)
-        {
-            m_score += value;
-            SetScoreText();
-            if (thres <= 0)
-                value++;
-
-            --ballsHit;
-            --thres;
-            yield return null;
-        }
     }
 }

@@ -10,16 +10,19 @@ public class Timer : MonoBehaviour
     private bool m_ticking;
     private bool m_doSetText;
 
-    public float CurrentTime => m_cummulativeTime;
+    public float CurrentTime { get => m_cummulativeTime; set { m_cummulativeTime = value; } }
     public string FormattedTime => ((int)m_cummulativeTime / 60).ToString().PadLeft(2, '0') + ":" + ((int)m_cummulativeTime % 60).ToString().PadLeft(2, '0');
 
     [SerializeField] private Text m_timerText;
 
-    private void Start()
+    private void Awake()
     {
         m_ticking = false;
         m_doSetText = false;
+    }
 
+    private void Start()
+    {
         GameManager.Instance.EnterPhaseEvent += HandleEvent;
         GameManager.Instance.GamePaused += HandleGamePause;
     }
@@ -67,13 +70,13 @@ public class Timer : MonoBehaviour
         }
     }
 
-    private void StartTiming()
+    public void StartTiming()
     {
         m_doSetText = true;
         m_ticking = true;
     }
 
-    private void StopTiming()
+    public void StopTiming()
     {
         m_doSetText = false;
         m_ticking = false;

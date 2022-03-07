@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
@@ -13,8 +14,6 @@ public class GameManager : MonoBehaviour
         TURN_START,
         PLAYER_TURN,
         GAME_END,
-        TIMEATK_STALLING,
-        TIMEATK_POPULIZING
     }
 
 
@@ -56,6 +55,11 @@ public class GameManager : MonoBehaviour
     [SerializeField] private HighScoreboard m_highScoreboard;
     [SerializeField] private GameOverBoardControl m_gameOverBoard;
     [SerializeField] private GameObject m_pauseScreenObj;
+    [SerializeField] private TimeAttackTimer m_timeAtkTimer;
+    [SerializeField] private Button m_newGameButton;
+    [SerializeField] private Button m_timeAtkButton;
+    [SerializeField] private Button m_pauseButton;
+    [SerializeField] private TutorialController m_tutorial;
 
     // Gameplay controls
     [SerializeField] private BoardController m_boardController;
@@ -67,7 +71,9 @@ public class GameManager : MonoBehaviour
 
     //################# Properties
     public Phase CurrentPhase => m_currPhase;
-    public bool IsInGame => CurrentPhase != Phase.NONE;
+    public bool IsInGame => CurrentPhase != Phase.NONE && CurrentPhase != Phase.GAME_END;
+
+
     public bool IsTimeAttack => m_isTimeAtk;
     public bool IsDebug => m_debug;
     public bool EditorOn { get; protected set; }
@@ -75,14 +81,16 @@ public class GameManager : MonoBehaviour
     public bool IsPaused => m_isPaused;
 
 
+    //################# Events
+    public event EventHandler<Phase> EnterPhaseEvent;
+    public event EventHandler<Boolean> GamePaused;
+
+
     //################# Methods
     private void Awake()
     {
         Instance = this;
         m_isTimeAtk = false;
-
-        // TODO: Load preferences, saved games, high scores.
-
     }
 
     public void NewGame()
@@ -96,6 +104,12 @@ public class GameManager : MonoBehaviour
     {
         if (IsInGame && IsTimeAttack) return;
         m_isTimeAtk = value;
+        if (m_isTimeAtk) m_timeAtkTimer.TurnOn();
+        else m_timeAtkTimer.TurnOff();
+
+        m_timeAtkTimer.TickOneTurn();
+        if (IsPaused) m_timeAtkTimer.TogglePause(this, true);
+
     }
 
     private void OnBoardSetUp(object sender, EventArgs e)
@@ -106,10 +120,14 @@ public class GameManager : MonoBehaviour
 
     private void OnPreviewPopulated(object sender, Color[] e)
     {
+        m_previewer.SetPreviews(e);
         if (m_currPhase == Phase.TURN_START)
         {
             m_turnCount += 1;
-            m_previewer.SetPreviews(e);
+
+            if (IsTimeAttack)
+                m_timeAtkTimer.TickOneTurn();
+
             SetPhase(Phase.PLAYER_TURN);
         }
     }
@@ -127,6 +145,12 @@ public class GameManager : MonoBehaviour
 
     public void SetEndGame()
     {
+        if (IsPaused)
+            m_pauseButton.onClick.Invoke();
+
+        if (IsTimeAttack)
+            m_timeAtkTimer.TurnOff();
+
         SetPhase(Phase.GAME_END);
     }
 
@@ -147,20 +171,63 @@ public class GameManager : MonoBehaviour
     {
         m_gameOverBoard.MakeBoard(m_scoreboard.FormattedScore, m_timer.FormattedTime, m_highScoreboard.HighScore < m_scoreboard.Score);
         m_highScoreboard.HighScore = m_scoreboard.Score;
+        SaveManager.Instance.SaveHighscore(m_highScoreboard.HighScore);
+        m_newGameButton.onClick.Invoke();
         SetPhase(Phase.NONE);
+    }
+
+    public void ShowTutorial()
+    {
+        m_pauseButton.onClick.Invoke();
+        m_tutorial.gameObject.SetActive(true);
     }
 
 
     private void Start()
     {
+        m_tutorial.gameObject.SetActive(false);
+
         m_boardController.BoardSetUp += OnBoardSetUp;
         m_boardController.PreviewSetup += OnPreviewPopulated;
         m_boardController.PlayerTurnDone += OnPlayerTurnDone;
         m_boardController.BoardFillled += OnBoardFillled;
         m_boardController.GameEndSequenceFinished += OnEnded;
 
-        m_currPhase = Phase.NONE;
-        EnterPhaseEvent?.Invoke(this, m_currPhase);
+        m_timeAtkTimer.TurnEnded += OnPlayerTurnDone;
+
+        // TODO: Load preferences, saved games, high scores.
+        m_highScoreboard.HighScore = SaveManager.Instance.LoadHighscore();
+
+        string state1, state2;
+        float time;
+        int score, turn;
+        bool timeAtk;
+        bool res = SaveManager.Instance.LoadGame(out state1, out state2, out time, out score, out turn, out timeAtk);
+        if (res)
+        {
+            m_newGameButton.onClick.Invoke();
+
+            m_boardController.LoadFromStrings(state1, state2);
+            SaveManager.Instance.ClearSave();
+
+            SetPhase(Phase.PLAYER_TURN);
+
+            m_timer.StartTiming();
+            m_timer.CurrentTime = time;
+            m_scoreboard.Score = score;
+            m_turnCount = turn;
+
+            if (timeAtk)
+                m_timeAtkButton.onClick.Invoke();
+
+            m_pauseButton.onClick.Invoke();
+
+        }
+        else
+        {
+            m_currPhase = Phase.NONE;
+            EnterPhaseEvent?.Invoke(this, m_currPhase);
+        }
     }
 
     private void OnDestroy()
@@ -168,7 +235,16 @@ public class GameManager : MonoBehaviour
         m_boardController.BoardSetUp -= OnBoardSetUp;
         m_boardController.PreviewSetup -= OnPreviewPopulated;
         m_boardController.PlayerTurnDone -= OnPlayerTurnDone;
-        m_boardController.BoardFillled -= OnEnded;
+        m_boardController.BoardFillled -= OnBoardFillled;
+        m_boardController.GameEndSequenceFinished -= OnEnded;
+
+        m_timeAtkTimer.TurnEnded -= OnPlayerTurnDone;
+    }
+
+    private void OnApplicationQuit()
+    {
+        if (IsInGame)
+            SaveManager.Instance.SaveGame();
     }
 
     private void SetPhase(Phase phase)
@@ -177,22 +253,15 @@ public class GameManager : MonoBehaviour
         EnterPhaseEvent?.Invoke(this, m_currPhase);
     }
 
-    public bool TogglePause()
+    public void SetPauseState(bool value)
     {
-        m_isPaused = !m_isPaused;
+        m_isPaused = value;
         GamePaused?.Invoke(this, m_isPaused);
         m_pauseScreenObj.SetActive(m_isPaused);
-        return m_isPaused;
     }
 
-    public void RegisterHit(int totalHitCount)
+    public void RegisterScore(int score)
     {
-        m_scoreboard.AddScore(totalHitCount);
+        m_scoreboard.AddScore(score);
     }
-
-
-    //################# Events
-
-    public event EventHandler<Phase> EnterPhaseEvent;
-    public event EventHandler<Boolean> GamePaused;
 }
