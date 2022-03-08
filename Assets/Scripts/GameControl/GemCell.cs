@@ -92,6 +92,7 @@ public class GemCell : MonoBehaviour
     public void OnSelected()
     {
         m_animator.SetBool("Pulsing", true);
+        AudioManager.Instance.Play("gem_selected");
     }
 
     /// <summary>
@@ -183,7 +184,11 @@ public class GemCell : MonoBehaviour
     {
         m_isPreview = false;
         m_animator.SetInteger("TransitionState", (int)AnimState.IDLE);
-        if (Type == GemType.BLOCK) m_manualAnimator.SetAsBlock(true, m_colorSet.DeadColor);
+        if (Type == GemType.BLOCK)
+        {
+            m_manualAnimator.SetAsBlock(true, m_colorSet.DeadColor);
+        }
+        AudioManager.Instance.Play("gem_pop");
     }
 
     /// <summary>
@@ -200,25 +205,27 @@ public class GemCell : MonoBehaviour
     /// <summary>
     /// Destroy the gem at the cell (if any).
     /// </summary>
-    public void DestroyGem(float delayDestroyTime = -1.0f, bool forceDestroy = false, GemType replaceType = GemType.NONE, int color = -1, bool isPreview = false)
+    public void DestroyGem(float delayDestroyTime = -1.0f, bool matched = true, bool forceDestroy = false, GemType replaceType = GemType.NONE, int color = -1, bool isPreview = false)
     {
         if (HasGem)
         {
             // Play egregious animation
             m_manualAnimator.DoDestroyAnimation(delayDestroyTime, replaceType, color, isPreview);
+            AudioManager.Instance.Play(matched ? "gem_match" : "gem_destroy");
             return;
         }
 
         if (forceDestroy)
         {
             Reset();
+            AudioManager.Instance.Play(matched ? "gem_match" : "gem_destroy");
         }
     }
 
     public void SetAsDead(float delayDestroyTime = -1.0f)
     {
         m_sprRdr.color = m_colorSet.DeadColor;
-        DestroyGem(delayDestroyTime, true);
+        DestroyGem(delayDestroyTime, false, true);
     }
 
     /// <summary>

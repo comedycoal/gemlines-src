@@ -14,6 +14,8 @@ public class TimeAttackTimer : MonoBehaviour
     private bool m_ticking;
     private float m_colorH, m_colorV;
 
+    private float m_soundCueTime;
+
     public float CurrentTime => m_timePassed;
 
     public bool DoneTicking => !m_ticking;
@@ -22,13 +24,20 @@ public class TimeAttackTimer : MonoBehaviour
     public event EventHandler TurnEnded;
 
 
-    private void Start()
+    private void Awake()
     {
         TurnOff();
         m_spriteRenderer.enabled = false;
         m_verticalScale = transform.localScale.y;
         Color.RGBToHSV(m_spriteRenderer.color, out m_colorH, out _, out m_colorV);
     }
+
+    private void Start()
+    {
+        m_soundCueTime = m_timeAtkDelay - AudioManager.Instance.GetLength("ding") + 0.4f;
+    }
+
+    private bool m_cuePlayed;
 
     private void Update()
     {
@@ -46,6 +55,12 @@ public class TimeAttackTimer : MonoBehaviour
             var color = Color.HSVToRGB(m_colorH, ratio, m_colorV);
             color.a = a;
             m_spriteRenderer.color = color;
+
+            if (!m_cuePlayed && m_timePassed >= m_soundCueTime)
+            {
+                m_cuePlayed = true;
+                AudioManager.Instance.Play("ding");
+            }
 
             if (m_timePassed >= m_timeAtkDelay)
             {
@@ -86,6 +101,7 @@ public class TimeAttackTimer : MonoBehaviour
         {
             m_ticking = true;
             m_timePassed = 0.0f;
+            m_cuePlayed = false;
         }
     }
 }

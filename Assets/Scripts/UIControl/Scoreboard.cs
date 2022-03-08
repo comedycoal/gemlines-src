@@ -16,22 +16,15 @@ public class Scoreboard : MonoBehaviour
     private void Start()
     {
         m_score = 0;
-        GameManager.Instance.EnterPhaseEvent += HandleEvent;
     }
+
     private void OnDestroy()
     {
-        GameManager.Instance.EnterPhaseEvent -= HandleEvent;
+        
     }
 
-    private void HandleEvent(object sender, GameManager.Phase e)
-    {
-        if (e == GameManager.Phase.GAME_START)
-        {
-            Reset();
-        }
-    }
 
-    private void Reset()
+    public void Reset()
     {
         m_score = 0;
         SetScoreText();

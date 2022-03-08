@@ -163,6 +163,7 @@ public class BoardController : MonoBehaviour
     {
         int i = 0;
         m_previewQueue = new List<GemCell>();
+        m_emptyCellSet = new HashSet<GemCell>();
         while (i < c_boardSize * c_boardSize)
         {
             GemCell curr = m_grid[i / c_boardSize, i % c_boardSize];
@@ -274,11 +275,6 @@ public class BoardController : MonoBehaviour
         }
         else if (e == GameManager.Phase.TURN_START)
         {
-            if (m_selectedCell != null)
-            {
-                m_selectedCell.OnCancelSelected();
-                m_selectedCell = null;
-            }
             m_allowPlayerControl = false;
             ActualizePreviewedCells();
             PopulatePreviewCells(m_newGemPerTurn);
@@ -577,7 +573,7 @@ public class BoardController : MonoBehaviour
                         count += cell.Score();
                         if (cell == dest)
                         {
-                            cell.DestroyGem(-1, false, typePreview, colorIdxPreview, true);
+                            cell.DestroyGem(-1, false, true, typePreview, colorIdxPreview, true);
                         }
                         else
                         {

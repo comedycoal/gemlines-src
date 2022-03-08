@@ -25,15 +25,19 @@ public class TutorialController : MonoBehaviour
 
     public void OnLeftButton()
     {
+        var prevPage = Mathf.Max(0, m_currPage - 1); ;
+        if (prevPage == m_currPage) return;
         m_tutorialPages[m_currPage].SetActive(false);
-        m_currPage = Mathf.Max(0, m_currPage - 1);
+        m_currPage = prevPage;
         m_tutorialPages[m_currPage].SetActive(true);
     }
 
     public void OnRightButton()
     {
+        var nextPage = Mathf.Min(m_tutorialPages.Length - 1, m_currPage + 1);
+        if (nextPage == m_currPage) return;
         m_tutorialPages[m_currPage].SetActive(false);
-        m_currPage = Mathf.Min(m_tutorialPages.Length - 1, m_currPage + 1);
+        m_currPage = nextPage;
         m_tutorialPages[m_currPage].SetActive(true);
     }
 

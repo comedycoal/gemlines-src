@@ -21,32 +21,7 @@ public class Timer : MonoBehaviour
         m_doSetText = false;
     }
 
-    private void Start()
-    {
-        GameManager.Instance.EnterPhaseEvent += HandleEvent;
-        GameManager.Instance.GamePaused += HandleGamePause;
-    }
-
-    private void OnDestroy()
-    {
-        GameManager.Instance.EnterPhaseEvent -= HandleEvent;
-        GameManager.Instance.GamePaused -= HandleGamePause;
-    }
-
-    private void HandleEvent(object sender, GameManager.Phase e)
-    {
-        if (e == GameManager.Phase.GAME_END || e == GameManager.Phase.NONE)
-        {
-            StopTiming();
-        }
-        else if (e == GameManager.Phase.GAME_START)
-        {
-            Reset();
-            StartTiming();
-        }
-    }
-
-    private void HandleGamePause(object sender, bool paused)
+    public void Pause(bool paused)
     {
         if (paused)
             m_ticking = false;
