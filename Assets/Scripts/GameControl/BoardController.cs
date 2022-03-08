@@ -114,12 +114,14 @@ public class BoardController : MonoBehaviour
 
     public void HitCheckAll()
     {
-        for (int i = 0; i < c_boardSize; i++)
+        for (int j = 0; j < c_boardSize; j++)
         {
-            for (int j = 0; j < c_boardSize; j++)
+            int end = 1;
+            if (j == c_boardSize - 1) end = c_boardSize;
+            for (int i = 0; i < c_boardSize; ++i)
             {
                 List<List<GemCell>> cellsToDestroy;
-                bool hit = HitCheck(m_grid[i,j], out cellsToDestroy, false);
+                bool hit = HitCheck(m_grid[i, j], out cellsToDestroy, false);
 
                 if (hit)
                 {
@@ -130,7 +132,7 @@ public class BoardController : MonoBehaviour
                         {
                             if (cell.HasGem)
                             {
-                                count+=cell.Score();
+                                count += cell.Score();
                                 cell.DestroyGem();
                                 m_emptyCellSet.Add(cell); // Add back to empty set
                             }
@@ -734,56 +736,141 @@ public class BoardController : MonoBehaviour
     private bool HitCheck(GemCell cell, out List<List<GemCell>> cellsToDestroy, bool playerMove)
     {
         cellsToDestroy = new List<List<GemCell>>();
-        int[] dx = { -1, -1, 0 , 1};
-        int[] dy = { -1, 1, 1, 0 };
+        if (cell.IsCleaner && !playerMove) return false;
+        List<GemCell> res;
 
-        string ds = "";
-        for (int i = 0; i < 4; i++)
+        int i, j;
+        List<GemCell> line = new List<GemCell>();
+        // Horirzontal line
+        i = cell.X();
+        for (j = 0; j < c_boardSize; ++j)
+            line.Add(m_grid[i, j]);
+        if (cell.Type == GemCell.GemType.CLEANER_HOR)
         {
-            int commonColor = -2;
-            GemCell curr = cell;
-            GemCell toCheck = null;
-            if (curr.ColorIndex >= 0 && commonColor < 0) commonColor = curr.ColorIndex;
-            var row = new List<GemCell>();
-            int x = cell.X() - dx[i], y = cell.Y() - dy[i];
-            
-            while (IsInsideBoard(x, y))
-            {
-                toCheck = m_grid[x, y];
-                if (!toCheck.IsMatch(curr, ref commonColor, cell, playerMove))
-                    break;
-
-                row.Add(toCheck);
-                curr = toCheck;
-                x = x - dx[i];
-                y = y - dy[i];
-            }
-
-
-            curr = cell;
-            toCheck = null;
-            if (row.Count == 0) commonColor = -2;
-            if (curr.ColorIndex >= 0 && commonColor < 0) commonColor = curr.ColorIndex;
-
-            x = cell.X() + dx[i];
-            y = cell.Y() + dy[i];
-            while (IsInsideBoard(x, y))
-            {
-                toCheck = m_grid[x, y];
-                if (!toCheck.IsMatch(curr, ref commonColor, cell, playerMove))
-                    break;
-
-                row.Add(toCheck);
-                curr = toCheck;
-                x = x + dx[i];
-                y = y + dy[i];
-            }
-            ds += commonColor + ", ";
-            if (row.Count + 1 >= 5) cellsToDestroy.Add(row); 
+            cellsToDestroy.Add(line);
+            return true;
+        }
+        else
+        {
+            res = LineHitCheck(line);
+            if (res.Count > 0)
+                cellsToDestroy.Add(res);
         }
 
-        if (cellsToDestroy.Count > 0) cellsToDestroy[0].Add(cell);
+
+        // Vertical line
+        line.Clear();
+        j = cell.Y();
+        for (i = 0; i < c_boardSize; ++i)
+            line.Add(m_grid[i, j]);
+        if (cell.Type == GemCell.GemType.CLEANER_VER)
+        {
+            cellsToDestroy.Add(line);
+            return true;
+        }
+        else
+        {
+            res = LineHitCheck(line);
+            if (res.Count > 0)
+                cellsToDestroy.Add(res);
+        }
+
+
+        // Diagonal i - j = M
+        line.Clear();
+        int M = cell.X() - cell.Y();
+        i = Mathf.Max(M, 0);
+        j = M < 0 ? Mathf.Abs(M) : 0;
+        while (i < c_boardSize && j < c_boardSize)
+        {
+            line.Add(m_grid[i, j]);
+            ++i;
+            ++j;
+        }
+
+        res = LineHitCheck(line);
+        if (res.Count > 0)
+            cellsToDestroy.Add(res);
+
+
+        // Diagonal i + j = M
+        line.Clear();
+        M = cell.X() + cell.Y();
+        i = Mathf.Min(M, c_boardSize-1);
+        j = M < c_boardSize ? 0 : M - c_boardSize;
+        while (i >= 0 && j < c_boardSize)
+        {
+            line.Add(m_grid[i, j]);
+            --i;
+            ++j;
+        }
+
+        res = LineHitCheck(line);
+        if (res.Count > 0)
+            cellsToDestroy.Add(res);
+
+        string db = "HitCheck" + cell.name + ": ";
+        foreach (var l in cellsToDestroy)
+        {
+            foreach (var c in l)
+                db += c.X() + "," + c.Y() + "(" + c.ColorIndex + ") - ";
+        }
+        if (playerMove) Debug.Log(db);
+
         return cellsToDestroy.Count > 0;
+    }
+
+    private List<GemCell> LineHitCheck(List<GemCell> line)
+    {
+        int i = 0;
+        int start = 0;
+        int firstWild = -1;
+        int commonColor = -2;
+        List<GemCell> res = new List<GemCell>();
+        while (i < line.Count)
+        {
+            if (line[i].ColorIndex == -2)
+            {
+                // It is no longer a WILD streak
+                firstWild = -1;
+
+                if (i - start >= 5)
+                    res.AddRange(line.GetRange(start, i - start));
+
+                // Reset start to next
+                start = i + 1;
+                commonColor = -2;
+            }
+            else if (line[i].ColorIndex == -1)
+            {
+                // Set first wild, if it is first
+                if (firstWild == -1) firstWild = i;
+
+            }
+            else
+            {
+                if (commonColor < 0) commonColor = line[i].ColorIndex;
+                else if (commonColor != line[i].ColorIndex)
+                {
+                    if (i - start >= 5)
+                        res.AddRange(line.GetRange(start, i - start));
+
+                    // Reset start to i, or firstWild
+                    start = firstWild != -1 ? firstWild : i;
+                    commonColor = -2;
+                }
+
+                // It is no longer a WILD streak
+                firstWild = -1;
+            }
+
+            ++i;
+        }
+
+        if (i - start >= 5)
+            res.AddRange(line.GetRange(start, i - start));
+
+        return res;
     }
 
 

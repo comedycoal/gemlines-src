@@ -33,6 +33,7 @@ public class Scoreboard : MonoBehaviour
     public void AddScore(int score)
     {
         m_score += score;
+        SetScoreText();
     }
 
     private void SetScoreText()

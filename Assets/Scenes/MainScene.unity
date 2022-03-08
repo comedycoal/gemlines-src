@@ -374,7 +374,7 @@ MonoBehaviour:
     Pitch: 1
   - Name: gem_select
     Clip: {fileID: 8300000, guid: 8c5517de0d51e114191f011e1871109c, type: 3}
-    Volume: 1
+    Volume: 0.6
     Pitch: 1
   - Name: gem_destroy
     Clip: {fileID: 8300000, guid: cb858286a16b44947a24dd66776c9ef1, type: 3}
@@ -1837,11 +1837,11 @@ MonoBehaviour:
   m_gameEndWait: 0.5
   m_gemCellPrefab: {fileID: 7286437369340962434, guid: 27aa53a9138949d4f9195c521b065d1e, type: 3}
   m_gemCellDummyPrefab: {fileID: 7286437369340962434, guid: 51a517e3a6a725348a94f5dda76f4e47, type: 3}
-  m_normalWeight: 75
-  m_ghostWeight: 10
+  m_normalWeight: 80
+  m_ghostWeight: 8
   m_wildWeight: 8
-  m_cleanerWeight: 4
-  m_blockWeight: 4
+  m_cleanerWeight: 2
+  m_blockWeight: 2
   m_editorSelectorObj: {fileID: 1975729716}
 --- !u!1 &795462907
 GameObject:
@@ -2105,7 +2105,7 @@ MonoBehaviour:
   m_ScaleFactor: 1
   m_ReferenceResolution: {x: 320, y: 212}
   m_ScreenMatchMode: 0
-  m_MatchWidthOrHeight: 0
+  m_MatchWidthOrHeight: 1
   m_PhysicalUnit: 3
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96

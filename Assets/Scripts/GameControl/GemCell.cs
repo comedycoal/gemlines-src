@@ -92,7 +92,7 @@ public class GemCell : MonoBehaviour
     public void OnSelected()
     {
         m_animator.SetBool("Pulsing", true);
-        AudioManager.Instance.Play("gem_selected");
+        AudioManager.Instance.Play("gem_select");
     }
 
     /// <summary>
@@ -101,6 +101,7 @@ public class GemCell : MonoBehaviour
     public void OnCancelSelected()
     {
         m_animator.SetBool("Pulsing", false);
+        AudioManager.Instance.Play("gem_select");
     }
 
     private void SetGem(GemType type, int colorIndex)
@@ -248,9 +249,11 @@ public class GemCell : MonoBehaviour
         if (IsEmpty || other.IsEmpty || IsCleaner) return false;
 
         // Check against common color
+        int thisGemColor = m_colorIndex;
+        if (commonColorIdx >= 0 && Type == GemType.WILD) thisGemColor = commonColorIdx;
         if (commonColorIdx < 0 && ColorIndex >= 0) commonColorIdx = ColorIndex;
-        return ((commonColorIdx >= 0 && ColorIndex >= 0 && commonColorIdx == ColorIndex)
-            || (Type == GemType.WILD && other.ColorIndex >= -1));
+
+        return commonColorIdx >= -1 && thisGemColor >= -1 && commonColorIdx == thisGemColor;
     }
 
     public void setBoardPos(int x, int y)
