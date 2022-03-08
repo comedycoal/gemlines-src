@@ -118,7 +118,7 @@ public class BoardController : MonoBehaviour
         {
             int end = 1;
             if (j == c_boardSize - 1) end = c_boardSize;
-            for (int i = 0; i < c_boardSize; ++i)
+            for (int i = 0; i < end; ++i)
             {
                 List<List<GemCell>> cellsToDestroy;
                 bool hit = HitCheck(m_grid[i, j], out cellsToDestroy, false);
@@ -797,7 +797,7 @@ public class BoardController : MonoBehaviour
         line.Clear();
         M = cell.X() + cell.Y();
         i = Mathf.Min(M, c_boardSize-1);
-        j = M < c_boardSize ? 0 : M - c_boardSize;
+        j = M < c_boardSize ? 0 : M - (c_boardSize - 1);
         while (i >= 0 && j < c_boardSize)
         {
             line.Add(m_grid[i, j]);
@@ -809,13 +809,16 @@ public class BoardController : MonoBehaviour
         if (res.Count > 0)
             cellsToDestroy.Add(res);
 
-        string db = "HitCheck" + cell.name + ": ";
-        foreach (var l in cellsToDestroy)
+        if (GameManager.Instance.IsDebug)
         {
-            foreach (var c in l)
-                db += c.X() + "," + c.Y() + "(" + c.ColorIndex + ") - ";
+            string db = "HitCheck" + cell.name + ": ";
+            foreach (var l in cellsToDestroy)
+            {
+                foreach (var c in l)
+                    db += c.X() + "," + c.Y() + "(" + c.ColorIndex + ") - ";
+            }
+            if (playerMove) Debug.Log(db);
         }
-        if (playerMove) Debug.Log(db);
 
         return cellsToDestroy.Count > 0;
     }
@@ -829,7 +832,8 @@ public class BoardController : MonoBehaviour
         List<GemCell> res = new List<GemCell>();
         while (i < line.Count)
         {
-            if (line[i].ColorIndex == -2)
+            int thisColor = (line[i].IsEmpty ? -2 : line[i].ColorIndex);
+            if (thisColor == -2)
             {
                 // It is no longer a WILD streak
                 firstWild = -1;
@@ -841,7 +845,7 @@ public class BoardController : MonoBehaviour
                 start = i + 1;
                 commonColor = -2;
             }
-            else if (line[i].ColorIndex == -1)
+            else if (thisColor == -1)
             {
                 // Set first wild, if it is first
                 if (firstWild == -1) firstWild = i;
@@ -849,8 +853,8 @@ public class BoardController : MonoBehaviour
             }
             else
             {
-                if (commonColor < 0) commonColor = line[i].ColorIndex;
-                else if (commonColor != line[i].ColorIndex)
+                if (commonColor < 0) commonColor = thisColor;
+                if (commonColor != thisColor)
                 {
                     if (i - start >= 5)
                         res.AddRange(line.GetRange(start, i - start));
@@ -858,6 +862,7 @@ public class BoardController : MonoBehaviour
                     // Reset start to i, or firstWild
                     start = firstWild != -1 ? firstWild : i;
                     commonColor = -2;
+                    continue;
                 }
 
                 // It is no longer a WILD streak
