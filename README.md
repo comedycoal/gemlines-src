@@ -2,14 +2,20 @@
 
 GEMLINES is a remake of the classic game LINES 98, where you move and match balls against each other to score points. Well this is that, but with gems and other shenanigans!
 
+Developed with Unity Personal v.2020.3.30f1
+
 -------
 ### "Gem"play
-![GEMLINES' logo](gemlines-src/Assets/Sprites/Icons/Icon.png)
-If you need help, consult the "Help" section in-game for more information.
+![Gif](/README/main_gif.gif)
+
+- Get 5 gems or more into a horizontal, vertical or diagonal line to clear them and earn points!
+- Don't let the table be filled with gems!
 
 -----------
 ### Special gems
 
+- Ghost gems pass through other gems and let others pass through it.
+- Rainbow gems can match with any other gems (that have a color).
 -----------
 ### Time Attack mode
 Time Attack mode puts the player under the stress of having a clock ticking by their ear. It is exactly the same as Normal mode, but you can make any number of moves you want. That is, until the clock ticks and new gems come into play.
