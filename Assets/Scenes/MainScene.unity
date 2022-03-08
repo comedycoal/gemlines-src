@@ -1839,7 +1839,7 @@ MonoBehaviour:
   m_gemCellDummyPrefab: {fileID: 7286437369340962434, guid: 51a517e3a6a725348a94f5dda76f4e47, type: 3}
   m_normalWeight: 80
   m_ghostWeight: 8
-  m_wildWeight: 9999
+  m_wildWeight: 8
   m_cleanerWeight: 2
   m_blockWeight: 2
   m_editorSelectorObj: {fileID: 1975729716}
