@@ -615,7 +615,7 @@ public class BoardController : MonoBehaviour
     //---------// Pathfinding algorithm
     private List<GemCell> GetMovePath(GemCell src, GemCell dest)
     {
-        HashSet<GemCell> openSet = new HashSet<GemCell> { src };
+        List<GemCell> openSet = new List<GemCell> { src };
         HashSet<GemCell> closedSet = new HashSet<GemCell>();
 
         for (int i = 0; i < c_boardSize; i++)
@@ -629,16 +629,54 @@ public class BoardController : MonoBehaviour
 
         src.CummulativeGCost = 0;
 
+        List<int> xs = new List<int>();
+        List<int> ys = new List<int>();
         while (openSet.Count > 0)
         {
             GemCell curr = GetLowestFScore(openSet, dest);
             if (curr.X() == dest.X() && curr.Y() == dest.Y())
                 return MakePath(src, dest);
+            xs.Clear();
+            ys.Clear();
+            // Order: Try left, right, up, then down
 
-            int[] xs = { curr.X() - 1,  curr.X() + 1,   curr.X(),       curr.X() };
-            int[] ys = { curr.Y(),      curr.Y(),       curr.Y() - 1,   curr.Y() + 1 };
 
-            for (int i = 0; i < 4; ++i)
+            if (curr.PathFindingPrevNode != null)
+            {
+                int dx = curr.X() - curr.PathFindingPrevNode.X();
+                int dy = curr.Y() - curr.PathFindingPrevNode.Y();
+
+                // First: In the heading direction
+                xs.Add(curr.X() + dx);
+                ys.Add(curr.Y() + dy);
+
+                // Second: Turn sideway
+                if (dx == 0)
+                {
+                    xs.Add(curr.X() - 1); xs.Add(curr.X() + 1);
+                    ys.Add(curr.Y()); ys.Add(curr.Y());
+                }
+                else if (dy == 0)
+                {
+                    xs.Add(curr.X()); xs.Add(curr.X());
+                    ys.Add(curr.Y() - 1); ys.Add(curr.Y() + 1);
+                }
+
+                // Never ever turn back
+            }
+            else
+            {
+                xs.Add(curr.X() - 1);
+                xs.Add(curr.X() + 1);
+                xs.Add(curr.X());
+                xs.Add(curr.X());
+                ys.Add(curr.Y());
+                ys.Add(curr.Y());
+                ys.Add(curr.Y() - 1);
+                ys.Add(curr.Y() + 1);
+            }
+
+            for (int i = 0; i < xs.Count; ++i)
             {
                 if (IsInsideBoard(xs[i], ys[i]) && !closedSet.Contains(m_grid[xs[i], ys[i]] ) && !m_grid[xs[i], ys[i]].IsBlocking(src))
                 {
@@ -660,14 +698,14 @@ public class BoardController : MonoBehaviour
         return null;
     }
 
-    private GemCell GetLowestFScore(HashSet<GemCell> l, GemCell dest)
+    private GemCell GetLowestFScore(List<GemCell> l, GemCell dest)
     {
         int max = 999;
         GemCell res = null;
 
         foreach (var cell in l)
         {
-            int f = cell.Distance(dest) + cell.CummulativeGCost;
+            int f = cell.HScore(dest) + cell.CummulativeGCost;
             if (f < max)
             {
                 res = cell;

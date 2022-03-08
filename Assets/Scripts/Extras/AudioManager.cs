@@ -58,7 +58,7 @@ public class AudioManager : MonoBehaviour
     public void ModifyMusic(float pitchMod, float volumeMod)
     {
         m_mainMusic.Source.pitch = m_musicOriginalPitch * pitchMod;
-        m_mainMusic.Source.volume *= m_musicOriginalVolume * volumeMod;
+        m_mainMusic.Source.volume = m_musicOriginalVolume * volumeMod;
     }
 
     public void ResetMusic()

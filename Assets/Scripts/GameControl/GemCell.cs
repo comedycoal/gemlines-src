@@ -269,7 +269,7 @@ public class GemCell : MonoBehaviour
         return m_y;
     }
 
-    public int Distance(GemCell other)
+    public int HScore(GemCell other)
     {
         return Math.Abs(X() - other.X()) + Math.Abs(Y() - other.Y());
     }
@@ -285,5 +285,10 @@ public class GemCell : MonoBehaviour
         if (Type == GemType.WILD) return 30;
         if (Type == GemType.BLOCK) return 100;
         else return 10;
+    }
+
+    public static bool OnSameLine(GemCell a, GemCell b, GemCell c)
+    {
+        return (a.X() - b.X() == b.X() - c.X()) && (a.Y() - b.Y() == c.X() - c.Y());
     }
 }
