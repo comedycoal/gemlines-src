@@ -23,7 +23,7 @@ f debug mode is enabled, pressing F2 in-game will switch to debug mode and you c
 ### Build
 - Windows build:
 - Android build:
-- WebGL build can be found [Here](https://sendnoose.github.io/lines-webgl/). Performance is not guaranteed.
+- WebGL build can be found [Here](https://sendnoose.github.io/gemlines-webgl/). Performance is not guaranteed.
 
 -------
 ### Credits
