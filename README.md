@@ -18,6 +18,9 @@ Developed with Unity Personal v.2020.3.30f1
 
 - Ghost gems pass through other gems and let others pass through it.
 - Rainbow gems can match with any other gems (that have a color).
+- Cleaner gems clear an entire line, but only after moving.
+- Blocks cannot be moved and can only be cleared with cleaner gems.
+
 -----------
 ### Time Attack mode
 ![GIF of time attack mode](/README/time_atk.gif)
