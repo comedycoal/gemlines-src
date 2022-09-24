@@ -37,7 +37,7 @@ If debug mode is enabled, pressing F2 in-game will switch to debug mode and you 
 ### Build
 - Windows build: Can be found in [Releases](https://github.com/sendnoose/gemlines-src/releases)
 - Android build: not yet built.
-- WebGL build can be found [Here](https://sendnoose.github.io/gemlines-webgl/). Performance is not guaranteed.
+<!---- WebGL build can be found [Here](https://sendnoose.github.io/gemlines-webgl/). Performance is not guaranteed.-->
 
 -------
 ### Credits
